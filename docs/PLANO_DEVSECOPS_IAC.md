@@ -180,12 +180,22 @@ GitHub antes de commitar — os primeiros palpites (`@v4`/`@v3`/`@v0.28.0`)
 estavam desatualizados; `actionlint` sozinho não pega isso, porque a tag
 existe sintaticamente mesmo quando é a errada.
 
-**Como se prova:** introduzir de propósito uma dependência com CVE conhecida
-num branch de teste e confirmar que o Dependabot/Trivy sinalizam antes do
-merge; confirmar que um segredo de teste (chave falsa, formato reconhecível)
-é bloqueado no `push`, não só denunciado depois. Ainda não executado —
-fica para a primeira vez que um Dependabot PR ou um CodeQL finding reais
-aparecerem.
+**Como se prova:** não precisou de teste sintético — assim que os alerts do
+Dependabot foram ligados, o GitHub já reportou **25 vulnerabilidades reais**
+nas árvores de `npm` (1 critical em `handlebars`, o resto entre high e
+medium — `node-forge`, `lodash`, `flatted`, `underscore`, `qs`, `uuid`,
+`jose`). Todas em dependências transitivas de ferramentas de dev/teste
+(Playwright, mermaid, jsdom, newman) — nenhuma no caminho de execução da
+aplicação em produção — e todas já têm correção publicada, então
+`dependabot_security_updates` deve abrir PR sozinho para cada uma, sem
+esperar o cron semanal. O Trivy do PR #3, rodando contra as mesmas quatro
+árvores, não bloqueou: a severidade que ele atribui à mesma CVE de
+`handlebars` não bateu com `CRITICAL` na base dele (GHSA e a base do Trivy
+divergem ocasionalmente na classificação de uma CVE) — sinal de que as duas
+ferramentas se complementam, não que uma substitui a outra. Confirmar
+push-protection com um segredo de teste fica para quando a Fase 4 tornar
+isso relevante (é quando credencial de verdade passa a existir perto do
+repositório).
 
 ### Fase 3 — Containerização
 
