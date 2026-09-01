@@ -1,0 +1,62 @@
+name: CodeQL
+
+# Fase 2 do plano DevSecOps/IaC. SAST nativo do GitHub — grátis em
+# repositório público (D1). "Advanced setup" (workflow próprio), não o
+# "default setup" do botão único, para poder fixar a versão do Java e
+# rodar a mesma matriz em PR e no cron semanal.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # segunda-feira, 06:00 UTC
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # manual, não autobuild: build explícito é mais previsível que a
+          # heurística de detecção do autobuild contra um reator
+          # multi-módulo — mesma preferência por explícito sobre "mágico"
+          # que já rege o resto do backend (ver ARQUITETURA.md § 11, ADR de
+          # JdbcClient com SQL à mão em vez de jOOQ com codegen).
+          - language: java-kotlin
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/**/pom.xml
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - if: matrix.build-mode == 'manual'
+        working-directory: backend
+        run: mvn -B -ntp -DskipTests clean install
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"

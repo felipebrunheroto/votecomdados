@@ -1,0 +1,52 @@
+version: 2
+
+# Fase 2 do plano DevSecOps/IaC (docs/PLANO_DEVSECOPS_IAC.md). Ecossistema
+# `docker` entra na Fase 3, quando os Dockerfiles existirem — não há nada
+# para escanear antes disso.
+
+updates:
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+    groups:
+      dependencias-maven:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    groups:
+      dependencias-npm:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /tools
+    schedule:
+      interval: weekly
+    groups:
+      dependencias-npm:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: npm
+    directory: /backend/postman
+    schedule:
+      interval: weekly
+    groups:
+      dependencias-npm:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
