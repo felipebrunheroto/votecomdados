@@ -103,23 +103,29 @@ escrever e rodar o runbook.
 
 ## 5. Fases
 
-### Fase 0 — Fundações do repositório
+### Fase 0 — Fundações do repositório ✅ Entregue (02/09/2026)
 
 Pré-requisito literal de tudo mais: sem `git`, não existe GitHub Actions.
 
-1. `git init`, `.gitignore` (`target/`, `node_modules/`, `out/`,
-   `.terraform/`, `*.tfstate*`, `.env*`, `.m2-cache/`).
-2. Primeiro commit com o estado atual do repositório.
-3. Criar o repositório remoto no GitHub (visibilidade conforme D1) e
-   `git push`.
-4. Branch protection em `main`: status checks obrigatórios (conforme forem
-   existindo nas fases seguintes) antes de merge. Sem exigência de review
-   de terceiro — não existe segundo revisor —, mas nenhum push direto sem
-   os checks passarem.
+1. ~~`git init`, `.gitignore`~~ — feito (`target/`, `node_modules/`,
+   `web/.next/`, `web/out/`, `infra/.terraform/`, `*.tfstate*`, `*.tfvars`,
+   `.env*`, `.m2-cache/`, mais os dois arquivos locais do Claude Code).
+2. ~~Primeiro commit~~ — `fd80a94`, 202 arquivos, varrido contra padrões de
+   segredo (chave AKIA, `aws_secret_access_key`, chave privada PEM) antes de
+   commitar.
+3. ~~Criar o repositório remoto no GitHub e `git push`~~ —
+   [github.com/felipebrunheroto/votecomdados](https://github.com/felipebrunheroto/votecomdados),
+   público (D1), branch `main`.
+4. ~~Branch protection em `main`~~ — PR obrigatório para merge (0 aprovações
+   exigidas, não existe segundo revisor), sem force-push, sem exclusão do
+   branch. `required_status_checks` fica `null` por enquanto — não há
+   workflow ainda para exigir; entra assim que a Fase 1 existir.
 
-**Como se prova:** `git log` mostra o histórico, o repositório aparece no
-GitHub, e um PR de teste é bloqueado por branch protection até os checks
-(ainda vazios nesta fase) serem satisfeitos.
+**Como se prova:** `git log` mostra o histórico ✓; o repositório aparece
+público no GitHub ✓; branch protection ativa, confirmada via
+`gh api repos/felipebrunheroto/votecomdados/branches/main/protection` ✓.
+Falta só confirmar o bloqueio de push direto com um PR de teste, depois que
+a Fase 1 existir para dar um check real a exigir.
 
 ### Fase 1 — CI de qualidade (sem nuvem, sem decisão de provedor pendente)
 
