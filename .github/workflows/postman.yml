@@ -1,0 +1,61 @@
+name: Postman
+
+# Fase 1 do plano DevSecOps/IaC. Sobe a MESMA stack que o compose.yml da
+# raiz já usa para desenvolvimento local (db + api + web) e roda a coleção
+# Postman contra ela de verdade — não só a API isolada, o caminho inteiro
+# que um usuário real percorre.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: postman-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  newman:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: docker compose up
+        run: docker compose up -d db api
+
+      - name: aguardar a API responder
+        run: |
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              http://localhost:8080/api/v1/politicos/a1000000-0000-4000-8000-000000000001 || true)
+            if [ "$code" = "200" ]; then
+              echo "API respondeu depois de $i tentativa(s)"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "API não respondeu a tempo"
+          docker compose logs api
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/postman/package-lock.json
+
+      - name: npm ci
+        working-directory: backend/postman
+        run: npm ci
+
+      - name: npm run rodar (newman)
+        working-directory: backend/postman
+        run: npm run rodar
+
+      - name: docker compose logs (em caso de falha)
+        if: failure()
+        run: docker compose logs
+
+      - name: docker compose down
+        if: always()
+        run: docker compose down -v
