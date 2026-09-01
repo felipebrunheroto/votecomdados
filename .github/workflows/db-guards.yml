@@ -1,0 +1,33 @@
+name: Guards do banco
+
+# Fase 1 do plano DevSecOps/IaC. Os três guards já existiam e já se provam
+# sozinhos via código de saída (ver os cabeçalhos de cada script) — só
+# nunca tinham rodado fora da máquina de um operador.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: db-guards-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: schema.sql == migrations (db/validar-migrations.sh)
+        run: ./db/validar-migrations.sh
+
+      - name: invariantes do schema (db/validar.sh)
+        run: ./db/validar.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: contrato de enums banco/Java/TypeScript (tools/validar-contrato.mjs)
+        run: node tools/validar-contrato.mjs
