@@ -197,24 +197,34 @@ push-protection com um segredo de teste fica para quando a Fase 4 tornar
 isso relevante (é quando credencial de verdade passa a existir perto do
 repositório).
 
-### Fase 3 — Containerização
+### Fase 3 — Containerização ✅ Entregue (02/09/2026)
 
 1. `backend/votecomdados-api/Dockerfile`: multi-stage, build Maven no
    estágio de compilação, runtime `eclipse-temurin:21-jre-alpine`, conforme
    já especificado em [BACKEND.md § 7](BACKEND.md#7-empacotamento-e-deploy).
    `-XX:MaxRAMPercentage=75` no `ENTRYPOINT`, não deixado para a task
-   definition lembrar.
+   definition lembrar. Usuário não-root. `backend/.dockerignore` novo —
+   sem ele, `node_modules/` de `backend/postman` (73 MB) e todo `target/`
+   entravam no contexto de build por padrão.
 2. `backend/votecomdados-ingestion/Dockerfile`: mesmo padrão, sem exposição
    de porta (é uma task batch, não um service).
 3. `.github/workflows/trivy-image.yml`: build das duas imagens em todo PR
-   que toque `backend/**`, `trivy image` bloqueando CVE crítico sem patch
-   disponível, `trivy image --format cyclonedx` publicando o SBOM como
-   artefato do workflow.
+   que toque `backend/**`, `trivy image` bloqueando CRITICAL com correção
+   disponível (mesma política da Fase 2, mesma ferramenta), publica o SBOM
+   (CycloneDX) de cada imagem como artefato do workflow (90 dias de
+   retenção).
+4. `dependabot.yml` ganhou os dois ecossistemas `docker` que a Fase 2 tinha
+   deixado pendentes.
 
-**Como se prova:** `docker build` local das duas imagens sobe e responde
-igual ao `docker compose` atual (mesmo comportamento, imagem por Dockerfile
-em vez de `mvn spring-boot:run` num container Maven genérico); o workflow
-falha se uma dependência com CVE crítico for introduzida de propósito.
+**Como se prova:** verificado localmente antes de commitar, não só na
+descrição do plano — `docker build` das duas imagens; a API rodando contra
+um Postgres real (rede Docker isolada, sem tocar no `compose.yml` da raiz)
+aplicou as 13 migrations, respondeu `200` em `/api/v1/politicos/{id}` e
+`{"status":"UP"}` em `/actuator/health/readiness`, rodou como usuário
+`votecomdados` (não root) e desligou sem travar em `docker stop`. O
+workflow em si ainda não foi exercitado contra um PR real com CVE
+introduzida de propósito — fica para a primeira vez que o Trivy de imagem
+tiver algo relevante para sinalizar, mesmo raciocínio da Fase 2.
 
 ### Fase 4 — Bootstrap do estado remoto do Terraform (passo manual único)
 
