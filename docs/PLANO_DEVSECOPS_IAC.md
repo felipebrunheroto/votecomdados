@@ -127,21 +127,29 @@ público no GitHub ✓; branch protection ativa, confirmada via
 Falta só confirmar o bloqueio de push direto com um PR de teste, depois que
 a Fase 1 existir para dar um check real a exigir.
 
-### Fase 1 — CI de qualidade (sem nuvem, sem decisão de provedor pendente)
+### Fase 1 — CI de qualidade ✅ Entregue (02/09/2026)
 
 Tudo que hoje só roda manualmente (esta sessão inteira dependeu disso)
 passa a rodar em todo PR e push para `main`. Zero infraestrutura de nuvem
-envolvida — pode começar antes de D2/D3 estarem resolvidas.
+envolvida — começou antes de D2/D3 estarem resolvidas, como previsto.
 
 | Workflow | O que roda | Origem |
 |---|---|---|
-| `.github/workflows/backend.yml` | `./mvnd clean test` (162 testes) | já existe, só nunca rodou em CI |
-| `.github/workflows/db-guards.yml` | `db/validar-migrations.sh`, `db/validar.sh`, `node tools/validar-contrato.mjs` | já existem, mesma situação |
-| `.github/workflows/frontend.yml` | `npm run typecheck`, `npm run lint`, `npm run build` (sem `NEXT_PUBLIC_API_URL`, valida que o export com fixtures não quebra) | já existem |
-| `.github/workflows/postman.yml` | `docker compose up -d`, aguardar `/api/v1/politicos/...` responder, `npm run rodar` | reaproveita o `compose.yml` da raiz, validado nesta sessão |
+| `.github/workflows/backend.yml` (check `test`) | `mvn clean test` (162 testes, Testcontainers) | já existia como `./mvnd clean test`, só nunca tinha rodado em CI — no runner, `actions/setup-java` substitui o wrapper Docker local, que só existe por falta de JDK na máquina de dev |
+| `.github/workflows/db-guards.yml` (check `guards`) | `db/validar-migrations.sh`, `db/validar.sh`, `node tools/validar-contrato.mjs` | já existiam, mesma situação |
+| `.github/workflows/frontend.yml` (check `build`) | `npm run typecheck`, `npm run lint`, `npm run build` (sem `NEXT_PUBLIC_API_URL`, valida que o export com fixtures não quebra) | já existiam |
+| `.github/workflows/postman.yml` (check `newman`) | `docker compose up -d db api`, aguardar `/api/v1/politicos/...` responder, `npm run rodar` | reaproveita o `compose.yml` da raiz, validado nesta sessão |
 
-**Como se prova:** um PR que quebra qualquer um desses (ex.: um teste
-falhando de propósito) é bloqueado pelo branch protection da Fase 0.
+Validados com `actionlint` antes do primeiro push (zero achados). Branch
+protection em `main` atualizada com os quatro checks como obrigatórios
+(`strict: true` — a branch precisa estar atualizada com `main` antes de
+poder mergear, não só ter passado em algum commit anterior).
+
+**Como se prova:** PR #2 rodou os quatro workflows pela primeira vez contra
+código real — `test` (1m36s), `guards` (19s), `build` (35s), `newman`
+(1m17s), todos ✅ na primeira tentativa. Falta só confirmar que um PR que
+quebra algum deles de propósito é bloqueado — verificação natural da
+próxima vez que algo realmente quebrar, não simulada aqui.
 
 ### Fase 2 — Segurança de código e supply chain (ainda sem nuvem)
 
