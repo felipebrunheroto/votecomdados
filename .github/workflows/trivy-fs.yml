@@ -1,0 +1,36 @@
+name: Trivy (dependências)
+
+# Fase 2 do plano DevSecOps/IaC. Escaneia árvore de dependências antes de
+# existir imagem Docker (isso vem na Fase 3, mesma ferramenta — Trivy cobre
+# imagem, IaC e SBOM também, ver docs/PLANO_DEVSECOPS_IAC.md § 4).
+#
+# Bloqueia só CRITICAL com correção disponível (`ignore-unfixed: true`):
+# travar o merge por uma CVE sem patch não protege nada, só empata o
+# repositório numa vulnerabilidade que ninguém consegue corrigir ainda.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: trivy-fs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        alvo: [backend, web, tools, backend/postman]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ matrix.alvo }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
