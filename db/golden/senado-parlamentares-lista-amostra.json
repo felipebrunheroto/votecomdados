@@ -1,0 +1,126 @@
+{
+  "ListaParlamentarLegislatura": {
+    "Metadados": {
+      "Versao": "01/09/2026 10:04:10",
+      "VersaoServico": "4",
+      "DataVersaoServico": "2021-09-09",
+      "DescricaoDataSet": "Retorna a lista de Senadores em um intervalo de Legislaturas."
+    },
+    "Parlamentares": {
+      "Parlamentar": [
+        {
+          "IdentificacaoParlamentar": {
+            "CodigoParlamentar": "5672",
+            "CodigoPublicoNaLegAtual": "800",
+            "NomeParlamentar": "Alan Rick",
+            "NomeCompletoParlamentar": "Alan Rick Miranda",
+            "SexoParlamentar": "Masculino",
+            "FormaTratamento": "Senador ",
+            "UrlFotoParlamentar": "https://www.senado.leg.br/senadores/img/fotos-oficiais/senador-exemplo.jpg",
+            "UrlPaginaParlamentar": "https://www25.senado.leg.br/web/senadores/senador/-/perfil/exemplo",
+            "EmailParlamentar": "sen.exemplo@senado.leg.br",
+            "SiglaPartidoParlamentar": "REPUBLICANOS",
+            "UfParlamentar": "AC"
+          },
+          "Mandatos": {
+            "Mandato": [
+              {
+                "CodigoMandato": "596",
+                "UfParlamentar": "AC",
+                "PrimeiraLegislaturaDoMandato": {
+                  "NumeroLegislatura": "57",
+                  "DataInicio": "2023-02-01",
+                  "DataFim": "2027-01-31"
+                },
+                "SegundaLegislaturaDoMandato": {
+                  "NumeroLegislatura": "58",
+                  "DataInicio": "2027-02-01",
+                  "DataFim": "2031-01-31"
+                },
+                "DescricaoParticipacao": "Titular",
+                "Suplentes": {
+                  "Suplente": [
+                    {
+                      "DescricaoParticipacao": "1º Suplente",
+                      "CodigoParlamentar": "6343",
+                      "NomeParlamentar": "Gemil Junior"
+                    },
+                    {
+                      "DescricaoParticipacao": "2º Suplente",
+                      "CodigoParlamentar": "6344",
+                      "NomeParlamentar": "Coronel Casagrande"
+                    }
+                  ]
+                },
+                "Exercicios": {
+                  "Exercicio": [
+                    {
+                      "CodigoExercicio": "3028",
+                      "DataInicio": "2023-02-01"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "IdentificacaoParlamentar": {
+            "CodigoParlamentar": "89",
+            "NomeParlamentar": "Albano Franco",
+            "NomeCompletoParlamentar": "Albano do Prado Pimentel Franco",
+            "SexoParlamentar": "Masculino",
+            "FormaTratamento": "Senador ",
+            "UrlFotoParlamentar": "https://www.senado.leg.br/senadores/img/fotos-oficiais/senador-exemplo.jpg",
+            "UrlPaginaParlamentar": "https://www25.senado.leg.br/web/senadores/senador/-/perfil/exemplo",
+            "SiglaPartidoParlamentar": "PSDB"
+          },
+          "Mandatos": {
+            "Mandato": [
+              {
+                "CodigoMandato": "33",
+                "UfParlamentar": "SE",
+                "PrimeiraLegislaturaDoMandato": {
+                  "NumeroLegislatura": "49",
+                  "DataInicio": "1991-02-01",
+                  "DataFim": "1995-01-31"
+                },
+                "SegundaLegislaturaDoMandato": {
+                  "NumeroLegislatura": "50",
+                  "DataInicio": "1995-02-01",
+                  "DataFim": "1999-01-31"
+                },
+                "DescricaoParticipacao": "Titular",
+                "Suplentes": {
+                  "Suplente": [
+                    {
+                      "DescricaoParticipacao": "1º Suplente",
+                      "CodigoParlamentar": "41",
+                      "NomeParlamentar": "José Alves"
+                    },
+                    {
+                      "DescricaoParticipacao": "2º Suplente",
+                      "CodigoParlamentar": "205",
+                      "NomeParlamentar": "Eraldo Machado de Lemos"
+                    }
+                  ]
+                },
+                "Exercicios": {
+                  "Exercicio": [
+                    {
+                      "CodigoExercicio": "122",
+                      "DataInicio": "1991-02-01",
+                      "DataFim": "1994-12-31",
+                      "SiglaCausaAfastamento": "REN",
+                      "DescricaoCausaAfastamento": "Renúncia"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

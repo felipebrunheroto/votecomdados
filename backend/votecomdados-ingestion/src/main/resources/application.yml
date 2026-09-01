@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: votecomdados-ingestion
+  main:
+    # Não é aplicação web: sem isto o Boot tentaria subir servidor se algum
+    # starter trouxesse um por transitividade.
+    web-application-type: none
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/votecomdados}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    hikari:
+      # O worker é sequencial. Precisa de pouquíssimas conexões: uma para o
+      # trabalho e outra, permanente, para o advisory lock da fonte — por isso
+      # o mínimo é 2 e não 1, senão o job trava esperando a si mesmo.
+      maximum-pool-size: ${DB_POOL_MAX:4}
+  flyway:
+    # As migrations são aplicadas pela API, que sobe antes. Aqui ficam
+    # desligadas de propósito: dois processos correndo Flyway ao mesmo tempo
+    # disputariam o lock de schema, e o worker não deve ser dono do schema.
+    enabled: false
+
+logging:
+  level:
+    br.org.votecomdados: ${LOG_NIVEL:info}

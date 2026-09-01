@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+/* ===========================================================================
+   Tokens — direção "sóbrio institucional".
+   Cores neutras com um acento único. A paleta evita vermelho/azul saturados
+   como cor de marca: num contexto eleitoral eles carregam leitura partidária,
+   e o requisito de neutralidade vale também para o visual.
+   =========================================================================== */
+
+:root {
+  --fundo: #ffffff;
+  --fundo-sutil: #f6f7f8;
+  --superficie: #ffffff;
+  --borda: #dfe3e8;
+  --borda-forte: #c3cad3;
+
+  --texto: #16202a;
+  --texto-suave: #5a6672;
+  --texto-tenue: #6b7683;   /* 4,62:1 sobre branco — #77828e dava 3,91:1 e reprovava em AA */
+
+  --acento: #1c5d73;          /* petróleo: institucional, sem leitura partidária */
+  --acento-contraste: #ffffff;
+  --acento-sutil: #e8f1f4;
+
+  /* Semânticas de voto: nunca usadas sozinhas — sempre com ícone + texto,
+     porque cor isolada reprova em WCAG e induz leitura política. */
+  --voto-sim: #1c6b45;
+  --voto-sim-fundo: #e7f3ec;
+  --voto-nao: #93331f;
+  --voto-nao-fundo: #fbeae6;
+  --voto-neutro: #5a6672;
+  --voto-neutro-fundo: #eef0f2;
+
+  --aviso-fundo: #fdf6e6;
+  --aviso-borda: #e8d9ae;
+  --aviso-texto: #6b5518;
+
+  /* Placar de votação — par DIVERGENTE (a favor <-> contra) com meio neutro.
+     Verde/vermelho foi descartado por cálculo, não por gosto: sob
+     deuteranopia o par tinha ΔE 5,2, ou seja, quem tem daltonismo
+     vermelho-verde não distinguiria "sim" de "não" — justamente a informação
+     central de um placar. Este par dá ΔE 17,4 sob protanopia e passa nas seis
+     verificações do validador de paleta. */
+  --placar-favor: #2170a0;
+  --placar-contra: #b0442c;
+  --placar-neutro: #6b7683;   /* abstenção — midpoint cinza, como manda o divergente */
+  --placar-ausente: #cfd5db;  /* ausentes: mesma família, um passo mais claro */
+
+  --foco: #1c5d73;
+  --raio: 0.375rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #10161c;
+    --fundo-sutil: #161e26;
+    --superficie: #182029;
+    --borda: #2b3742;
+    --borda-forte: #3d4c59;
+
+    --texto: #e8edf2;
+    --texto-suave: #a6b2bf;
+    --texto-tenue: #8b97a4;
+
+    --acento: #7cc4dc;
+    --acento-contraste: #0d1419;
+    --acento-sutil: #17313b;
+
+    --voto-sim: #6fc79a;
+    --voto-sim-fundo: #142c20;
+    --voto-nao: #e39882;
+    --voto-nao-fundo: #331913;
+    --voto-neutro: #a6b2bf;
+    --voto-neutro-fundo: #222c35;
+
+    --aviso-fundo: #2b2411;
+    --aviso-borda: #4d421f;
+    --aviso-texto: #e5d5a4;
+
+    /* Revalidado contra a superfície escura (#182029), não derivado por
+       inversão automática do tema claro. */
+    --placar-favor: #4a92c0;
+    --placar-contra: #cf7050;
+    --placar-neutro: #8b97a4;
+    --placar-ausente: #3d4c59;
+
+    --foco: #7cc4dc;
+  }
+}
+
+@theme inline {
+  --color-fundo: var(--fundo);
+  --color-fundo-sutil: var(--fundo-sutil);
+  --color-superficie: var(--superficie);
+  --color-borda: var(--borda);
+  --color-borda-forte: var(--borda-forte);
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+  --color-texto-tenue: var(--texto-tenue);
+  --color-acento: var(--acento);
+  --color-acento-contraste: var(--acento-contraste);
+  --color-acento-sutil: var(--acento-sutil);
+  --color-voto-sim: var(--voto-sim);
+  --color-voto-sim-fundo: var(--voto-sim-fundo);
+  --color-voto-nao: var(--voto-nao);
+  --color-voto-nao-fundo: var(--voto-nao-fundo);
+  --color-voto-neutro: var(--voto-neutro);
+  --color-voto-neutro-fundo: var(--voto-neutro-fundo);
+  --color-aviso-fundo: var(--aviso-fundo);
+  --color-aviso-borda: var(--aviso-borda);
+  --color-aviso-texto: var(--aviso-texto);
+  --color-placar-favor: var(--placar-favor);
+  --color-placar-contra: var(--placar-contra);
+  --color-placar-neutro: var(--placar-neutro);
+  --color-placar-ausente: var(--placar-ausente);
+  --radius-padrao: var(--raio);
+}
+
+body {
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Foco sempre visível — requisito WCAG 2.1 AA e essencial para navegação
+   por teclado, que é como boa parte dos leitores de tela opera. */
+:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

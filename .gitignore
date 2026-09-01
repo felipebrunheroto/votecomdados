@@ -1,0 +1,30 @@
+# Sistema operacional
+.DS_Store
+
+# Claude Code — configuração e estado locais, nunca compartilhados
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Node (web/, tools/, backend/postman/)
+node_modules/
+web/.next/
+web/out/
+
+# Maven (backend/)
+target/
+.m2-cache/
+
+# Terraform (infra/) — .terraform.lock.hcl NÃO entra aqui: fixa versão de
+# provider, é para ser versionado, igual a um package-lock.json.
+infra/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+
+# Segredos e configuração local — nunca versionados (ver ARQUITETURA.md § 10)
+.env
+.env.*
+!.env.*.example

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <!--
+    O conversor de mensagem é trocado por um que mascara o que parece CPF ou
+    título de eleitor. Vale para TODO log da aplicação, inclusive o de
+    bibliotecas: o caminho de erro é onde payload cru costuma escapar, e ali
+    não há como garantir que quem loga passou pela redação.
+
+    Isto é rede, não garantia — a garantia é a allowlist do
+    RedatorDeCamposSensiveis. Ver a nota na classe.
+  -->
+  <conversionRule conversionWord="msgSeguro"
+                  class="br.org.votecomdados.ingestion.staging.MascaraDeDadosSensiveis"/>
+
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] %logger{36} - %msgSeguro%n</pattern>
+    </encoder>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+</configuration>

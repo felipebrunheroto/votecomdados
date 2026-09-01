@@ -1,0 +1,47 @@
+# Ambiente local: Postgres + API.
+#
+#   docker compose up -d db      # só o banco (para rodar a API pela IDE)
+#   docker compose up            # tudo
+#
+# O perfil `dev` carrega o seed de exemplo; sem ele, sobe só o schema.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: votecomdados
+      POSTGRES_PASSWORD: postgres
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d votecomdados"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - dados-postgres:/var/lib/postgresql/data
+
+  api:
+    image: maven:3.9-eclipse-temurin-21
+    working_dir: /projeto
+    # Instala o core primeiro e roda só a api: com `-am`, o goal `run` também
+    # é aplicado ao POM pai, que não tem classe principal.
+    # Instala o reator inteiro (o POM pai também precisa estar no repositório
+    # local) e só então roda a api: com `-am`, o goal `run` seria aplicado ao
+    # POM pai, que não tem classe principal.
+    command: >
+      sh -c "mvn -q install -DskipTests &&
+             mvn -q -pl votecomdados-api spring-boot:run"
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/votecomdados
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      SPRING_PROFILES_ACTIVE: dev
+    ports: ["8080:8080"]
+    volumes:
+      - .:/projeto
+      - ../.m2-cache:/root/.m2
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  dados-postgres:

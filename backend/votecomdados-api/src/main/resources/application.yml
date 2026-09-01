@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: votecomdados-api
+  lifecycle:
+    # Janela para drenar as requisições em voo no SIGTERM. O stopTimeout da
+    # task (ECS) e o deregistration delay do balanceador precisam ser MAIORES
+    # que isto — se forem menores, o orquestrador mata o processo no meio da
+    # drenagem e todo deploy corta conexões (ver ARQUITETURA.md, R6).
+    timeout-per-shutdown-phase: 25s
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/votecomdados}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    hikari:
+      # Dimensionado pelo teto de conexões do banco, não pela CPU: com várias
+      # instâncias da API o limite do Postgres é atingido antes da CPU
+      # (ver REVISAO_ARQUITETURA.md, A10).
+      maximum-pool-size: ${DB_POOL_MAX:10}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  threads:
+    virtual:
+      # Virtual threads: código bloqueante simples com throughput de I/O
+      # adequado, sem o custo de legibilidade do modelo reativo.
+      enabled: true
+  jackson:
+    default-property-inclusion: always
+
+server:
+  # Graceful shutdown: sem isso, todo deploy corta conexões em voo.
+  shutdown: graceful
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        # O balanceador aponta para readiness, que contém APENAS o banco.
+        # Usar o grupo agregado causaria falha em cascata: qualquer dependência
+        # lateral fora do ar esvaziaria a frota inteira. Toda dependência nova
+        # fica fora dos dois grupos por padrão (ver ARQUITETURA.md § 9).
+        readiness:
+          include: db
+        liveness:
+          include: ping
+
+logging:
+  level:
+    org.springframework.jdbc.core: ${LOG_SQL:info}

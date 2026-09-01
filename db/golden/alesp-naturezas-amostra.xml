@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<natureza>
+  <natureza><idNatureza>1</idNatureza><nmNatureza>Projeto de lei</nmNatureza><sgNatureza>PL</sgNatureza><tpNatureza>ME</tpNatureza></natureza>
+  <natureza><idNatureza>6</idNatureza><nmNatureza>Moção</nmNatureza><sgNatureza>Moção</sgNatureza><tpNatureza>ME</tpNatureza></natureza>
+  <natureza><idNatureza>1000000003</idNatureza><nmNatureza>Requerimento de Comissao</nmNatureza><sgNatureza>Req Com</sgNatureza><tpNatureza>ME</tpNatureza></natureza>
+</natureza>

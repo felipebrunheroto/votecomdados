@@ -1,0 +1,13 @@
+{
+  "name": "votecomdados-tools",
+  "private": true,
+  "type": "module",
+  "description": "Utilitários de validação da documentação",
+  "scripts": {
+    "validar-mermaid": "node validar-mermaid.mjs ../docs/*.md"
+  },
+  "dependencies": {
+    "jsdom": "^24.0.0",
+    "mermaid": "^11.0.0"
+  }
+}

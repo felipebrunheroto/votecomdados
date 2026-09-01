@@ -1,0 +1,85 @@
+# Ambiente local completo: Postgres + API + Web, para ver o que foi
+# construído até agora sem instalar Java, Maven ou Node.
+#
+#   docker compose up             # tudo — abra http://localhost:3000
+#   docker compose up -d db api   # só backend (equivalente a backend/compose.yml)
+#   docker compose down           # para tudo, mantém o volume do Postgres
+#   docker compose down -v        # para tudo e apaga o banco
+#
+# O perfil `dev` da API carrega dados de exemplo automaticamente (schema +
+# seed, via Flyway) — não é preciso rodar a ingestão para ver algo na tela.
+#
+# Este arquivo soma o backend/compose.yml (já documentado em
+# backend/README.md, e que continua funcionando sozinho para quem só quer
+# a API) com um serviço `web`, no mesmo estilo: imagem oficial + bind mount
+# + comando, sem Dockerfile — é ambiente de desenvolvimento, não a imagem
+# que vai para produção.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: votecomdados
+      POSTGRES_PASSWORD: postgres
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d votecomdados"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - dados-postgres:/var/lib/postgresql/data
+
+  api:
+    image: maven:3.9-eclipse-temurin-21
+    working_dir: /projeto
+    # Instala o reator inteiro (o POM pai também precisa estar no repositório
+    # local) e só então roda a api: com `-am`, o goal `run` seria aplicado ao
+    # POM pai, que não tem classe principal.
+    command: >
+      sh -c "mvn -q install -DskipTests &&
+             mvn -q -pl votecomdados-api spring-boot:run"
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/votecomdados
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      SPRING_PROFILES_ACTIVE: dev
+    ports: ["8080:8080"]
+    volumes:
+      - ./backend:/projeto
+      - ./.m2-cache:/root/.m2
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: node:22-alpine
+    working_dir: /projeto
+    command: sh -c "npm install && npm run dev"
+    environment:
+      # NEXT_PUBLIC_API_URL é o que o NAVEGADOR usa (fetch do lado do
+      # cliente) — por isso localhost:8080, a porta publicada no host.
+      #
+      # API_URL_INTERNO é o que o container `web` usa quando o código roda
+      # do lado do SERVIDOR (generateStaticParams, mesmo em `next dev`) —
+      # dali "localhost" é o próprio container `web`, não a API; só o nome
+      # do serviço (`api`) resolve na rede do compose. Sem prefixo
+      # NEXT_PUBLIC_, então nunca vaza para o bundle do navegador.
+      NEXT_PUBLIC_API_URL: http://localhost:8080/api/v1
+      API_URL_INTERNO: http://api:8080/api/v1
+      # Sem isto o watcher do Next não percebe alterações em arquivo
+      # bind-mountado de fora do container em algumas configurações de
+      # Docker Desktop (especialmente no Windows/WSL2).
+      WATCHPACK_POLLING: "true"
+    ports: ["3000:3000"]
+    volumes:
+      - ./web:/projeto
+      # node_modules do container fica em volume PRÓPRIO, não no bind mount:
+      # o pacote instalado for Linux (dentro do container) não pode ser o
+      # mesmo diretório que o `npm install` já rodou no macOS/ARM do host.
+      - web-node-modules:/projeto/node_modules
+    depends_on:
+      - api
+
+volumes:
+  dados-postgres:
+  web-node-modules:

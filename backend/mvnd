@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# Maven dentro de container — não há JDK instalado nesta máquina.
+#
+#   ./mvnd clean test
+#   ./mvnd -pl votecomdados-api spring-boot:run
+#
+# O cache do Maven fica em ../.m2-cache no host: sem ele, cada build rebaixaria
+# todas as dependências do zero.
+#
+# O socket do Docker é montado para que o Testcontainers (usado nos testes de
+# integração) consiga subir o Postgres a partir de dentro do container.
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# O REPOSITÓRIO inteiro é montado, não só backend/: os testes de integração
+# leem as amostras reais de db/golden/ por caminho relativo ("../../db/golden").
+# Montando apenas backend/, esse caminho aponta para fora do container e todo
+# teste que usa golden file falha com NoSuchFileException.
+REPO="$(cd "$RAIZ/.." && pwd)"
+CACHE="$REPO/.m2-cache"
+IMAGEM="${IMAGEM_MAVEN:-maven:3.9-eclipse-temurin-21}"
+
+mkdir -p "$CACHE"
+
+# -it só quando há terminal: em CI (ou em pipe) o docker recusa com
+# "the input device is not a TTY".
+TTY=()
+if [ -t 0 ] && [ -t 1 ]; then TTY=(-it); fi
+
+exec docker run --rm ${TTY[@]+"${TTY[@]}"} \
+    -v "$REPO":/repo \
+    -v "$CACHE":/root/.m2 \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
+    -e TESTCONTAINERS_RYUK_DISABLED=true \
+    --network host \
+    -w /repo/backend \
+    "$IMAGEM" \
+    mvn "$@"

@@ -1,0 +1,149 @@
+# VoteComDados - todos os endpoints da API local.
+# Extensao: REST Client (humao.rest-client). Clique em 'Send Request'.
+# Suba a API antes:  cd backend && docker compose up
+
+# Raiz da API local
+@baseUrl = http://localhost:8080
+# Adriana Ventura - trajetória nos 3 níveis, atuação federal e na Alesp
+@idCandidatoComAtuacao = a1000000-0000-4000-8000-000000000001
+# Joana Alcântara - sem mandato anterior (o caso da maioria)
+@idCandidatoSemAtuacao = a1000000-0000-4000-8000-000000000002
+# Adilson Barroso - registro indeferido e mandato de 1998
+@idCandidatoPre2001 = a1000000-0000-4000-8000-000000000003
+# Adolfo Viana (BA) - atuação estadual fora do escopo do MVP
+@idCandidatoOutroEstado = a1000000-0000-4000-8000-000000000004
+# PL 4015/2023 - tem coautores fora da coorte
+@idProposicao = 1197773
+@idVotacaoNominal = 555111
+# Sem voto individual: placar deve vir nulo
+@idVotacaoSimbolica = 555112
+# Alesp - voto de comissão, não de plenário
+@idVotacaoComissao = 777001
+@idVotacaoSecreta = 888001
+
+### ---------- 0. Saúde ----------
+
+### 0. Saúde / Readiness (usado pelo balanceador)
+# Contém APENAS o Postgres. Redis nunca entra aqui: cache fora do ar marcaria toda a frota como insalubre e o balanceador a esvaziaria.
+GET {{baseUrl}}/actuator/health/readiness
+Accept: application/json
+
+### 0. Saúde / Liveness
+# Só o processo. Nunca verifica dependência externa - liveness que falha por rede causa reinício em loop.
+GET {{baseUrl}}/actuator/health/liveness
+Accept: application/json
+
+### ---------- 1. Busca de candidatos ----------
+
+### 1. Busca de candidatos / Listar (padrão)
+# Só quem tem registro de candidatura em 2026.
+GET {{baseUrl}}/api/v1/politicos?pageSize=5
+Accept: application/json
+
+### 1. Busca de candidatos / Buscar por nome (sem acento)
+# A busca normaliza acentuação: 'acacio' encontra 'Acácio'.
+GET {{baseUrl}}/api/v1/politicos?q=acacio
+Accept: application/json
+
+### 1. Busca de candidatos / Filtrar por cargo e UF
+# Cargo aceita qualquer valor do enum, inclusive municipais no histórico.
+GET {{baseUrl}}/api/v1/politicos?cargo=SENADOR&uf=SP
+Accept: application/json
+
+### 1. Busca de candidatos / Somente com mandato anterior
+# A grande maioria dos ~28 mil candidatos não tem mandato legislativo. Este filtro alimenta a lista de pré-renderização do frontend.
+GET {{baseUrl}}/api/v1/politicos?comAtuacao=true&pageSize=100
+Accept: application/json
+
+### ---------- 2. Perfil do candidato ----------
+
+### 2. Perfil do candidato / Perfil completo (3 níveis)
+# Trajetória do TSE cobrindo municipal, estadual e federal, mais a cobertura declarada por esfera.
+GET {{baseUrl}}/api/v1/politicos/{{idCandidatoComAtuacao}}
+Accept: application/json
+
+### 2. Perfil do candidato / Candidato sem mandato anterior
+# O caso da maioria. O perfil existe; as listas é que vêm vazias.
+GET {{baseUrl}}/api/v1/politicos/{{idCandidatoSemAtuacao}}
+Accept: application/json
+
+### 2. Perfil do candidato / Candidato de outro estado (fora do escopo)
+# Fora de SP a atuação estadual não é coberta nesta versão - e isso é diferente de 'a fonte não publica'.
+GET {{baseUrl}}/api/v1/politicos/{{idCandidatoOutroEstado}}
+Accept: application/json
+
+### 2. Perfil do candidato / Projetos apresentados
+# Autoria do candidato, federal e estadual.
+GET {{baseUrl}}/api/v1/politicos/{{idCandidatoComAtuacao}}/proposicoes?page=1&pageSize=20
+Accept: application/json
+
+### 2. Perfil do candidato / Votações
+# O rótulo original da fonte é obrigatório em votação nominal: o enum é interpretação nossa, a string é o fato.
+GET {{baseUrl}}/api/v1/politicos/{{idCandidatoComAtuacao}}/votacoes
+Accept: application/json
+
+### 2. Perfil do candidato / Votações de mandato anterior a 2001
+# A Câmara não publica voto individual antes de 2001. A lista vem vazia por limite da fonte, não por falha da plataforma.
+GET {{baseUrl}}/api/v1/politicos/{{idCandidatoPre2001}}/votacoes
+Accept: application/json
+
+### ---------- 3. Detalhes ----------
+
+### 3. Detalhes / Proposição (autoria completa)
+# Coautores fora da coorte vêm com politicoId nulo: aparecem pelo nome, sem perfil. Omiti-los distorceria o registro da matéria.
+GET {{baseUrl}}/api/v1/proposicoes/{{idProposicao}}
+Accept: application/json
+
+### 3. Detalhes / Votação nominal (com placar)
+# 'outros' agrupa ausências e obstruções - não são posição sobre o mérito.
+GET {{baseUrl}}/api/v1/votacoes/{{idVotacaoNominal}}
+Accept: application/json
+
+### 3. Detalhes / Votação simbólica (placar nulo)
+# Placar nulo, não zero: zero sugeriria que ninguém votou, quando o que ocorre é que a Casa não registra o voto individual.
+GET {{baseUrl}}/api/v1/votacoes/{{idVotacaoSimbolica}}
+Accept: application/json
+
+### 3. Detalhes / Votação em comissão
+# Voto de comissão não tem o mesmo peso de deliberação em plenário; o campo ambito é o que impede a confusão.
+GET {{baseUrl}}/api/v1/votacoes/{{idVotacaoComissao}}
+Accept: application/json
+
+### 3. Detalhes / Votação secreta (Senado)
+# Secreta é NOMINAL, não simbólica: a Casa registra quem participou, só não como cada um votou. Placar nulo pelo mesmo motivo da simbólica.
+GET {{baseUrl}}/api/v1/votacoes/{{idVotacaoSecreta}}
+Accept: application/json
+
+### ---------- 4. Metadados ----------
+
+### 4. Metadados / Frescor por fonte
+# A data é sempre da última execução BEM-SUCEDIDA, mesmo quando a execução mais recente falhou - no seed, a Alesp está em FALHA.
+GET {{baseUrl}}/api/v1/meta/status
+Accept: application/json
+
+### ---------- 5. Erros e limites ----------
+
+### 5. Erros e limites / Candidato inexistente -> 404
+# 404 também para quem não é candidato em 2026: essas pessoas não têm registro pessoal na base.
+GET {{baseUrl}}/api/v1/politicos/00000000-0000-4000-8000-000000000000
+Accept: application/json
+
+### 5. Erros e limites / Proposição inexistente -> 404
+# Mesmo envelope de erro de todos os endpoints.
+GET {{baseUrl}}/api/v1/proposicoes/99999999
+Accept: application/json
+
+### 5. Erros e limites / pageSize acima do teto -> 400
+# Teto de 100 validado no servidor: a busca textual é o endpoint mais caro de servir e o mais barato de atacar.
+GET {{baseUrl}}/api/v1/politicos?pageSize=500
+Accept: application/json
+
+### 5. Erros e limites / q acima de 100 caracteres -> 400
+# Limita o custo da busca trigram por requisição.
+GET {{baseUrl}}/api/v1/politicos?q=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Accept: application/json
+
+### 5. Erros e limites / Cargo inválido -> 400
+# Valor fora do enum é rejeitado, não ignorado em silêncio.
+GET {{baseUrl}}/api/v1/politicos?cargo=IMPERADOR
+Accept: application/json

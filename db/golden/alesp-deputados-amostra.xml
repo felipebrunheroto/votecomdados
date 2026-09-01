@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Deputados>
+  <Deputado><IdDeputado>363</IdDeputado><IdSPL>434</IdSPL><IdUA>20378</IdUA><Situacao>EXE</Situacao><Andar>2º</Andar><Aniversario>09/04</Aniversario><txtAreaAtuacao>Combate a violência contra a mulher;
+Desenvolvimento Regional;
+Saúde;
+Educação;</txtAreaAtuacao><txtBaseEleitoral>Noroeste Paulista;
+Região Sudoeste da Grande São Paulo</txtBaseEleitoral><Biografia>Biografia sintética. O texto original foi substituído: é longo e não tem uso no pipeline.</Biografia><Email>gabinete.exemplo@al.sp.gov.br</Email><Matricula>300431</Matricula><NomeParlamentar>Analice Fernandes</NomeParlamentar><PlacaVeiculo>AAA0A00</PlacaVeiculo><Sala>261</Sala><Partido>PSD</Partido><Telefone>(11) 0000-0000</Telefone></Deputado>
+  <Deputado><IdDeputado>429</IdDeputado><IdSPL>12381</IdSPL><IdUA>20433</IdUA><Situacao>EXE</Situacao><Andar>3º</Andar><Aniversario>07/06</Aniversario><txtAreaAtuacao>Educação;
+Infraestrutura;
+Saúde;</txtAreaAtuacao><txtBaseEleitoral>Grande São Paulo;
+Vale do Ribeira;
+Vale do Paraíba;</txtBaseEleitoral><Biografia>Biografia sintética. O texto original foi substituído: é longo e não tem uso no pipeline.</Biografia><Email>gabinete.exemplo@al.sp.gov.br</Email><Matricula>300497</Matricula><NomeParlamentar>André do Prado</NomeParlamentar><PlacaVeiculo>AAA0A00</PlacaVeiculo><Sala>346</Sala><Partido>PL</Partido><Telefone>(11) 0000-0000</Telefone></Deputado>
+  <Deputado><IdDeputado>431</IdDeputado><IdSPL>12392</IdSPL><IdUA>20416</IdUA><Situacao>EXE</Situacao><Andar>1º</Andar><Aniversario>09/04</Aniversario><txtAreaAtuacao>Desenvolvimento do Interior;
+Turismo;
+Social;
+Saúde; 
+Educação;</txtAreaAtuacao><txtBaseEleitoral>Interior paulista</txtBaseEleitoral><Biografia>Biografia sintética. O texto original foi substituído: é longo e não tem uso no pipeline.</Biografia><Email>gabinete.exemplo@al.sp.gov.br</Email><Matricula>300499</Matricula><NomeParlamentar>Carlão Pignatari</NomeParlamentar><PlacaVeiculo>AAA0A00</PlacaVeiculo><Sala>148</Sala><Partido>PSD</Partido><Telefone>(11) 0000-0000</Telefone></Deputado>
+  <Deputado><IdDeputado>141</IdDeputado><IdSPL>82</IdSPL><IdUA>20457</IdUA><Situacao>EXE</Situacao><Andar> 1º Andar</Andar><Aniversario>14/05</Aniversario><txtAreaAtuacao>Segurança Pública; 
+Polícia Militar;</txtAreaAtuacao><txtBaseEleitoral>Capital;
+Grande São Paulo;</txtBaseEleitoral><Biografia>Biografia sintética. O texto original foi substituído: é longo e não tem uso no pipeline.</Biografia><Email>gabinete.exemplo@al.sp.gov.br</Email><Matricula>300205</Matricula><NomeParlamentar>Conte Lopes</NomeParlamentar><PlacaVeiculo>AAA0A00</PlacaVeiculo><Sala>156</Sala><Partido>PL</Partido><Telefone>(11) 0000-0000</Telefone></Deputado>
+  <Deputado><IdDeputado>372</IdDeputado><IdSPL>431</IdSPL><IdUA>20440</IdUA><Situacao>EXE</Situacao><Andar>T</Andar><Aniversario>20/05</Aniversario><txtAreaAtuacao>Educação;
+Cidadania; 
+Transportes; 
+Meio Ambiente; 
+Saúde;</txtAreaAtuacao><txtBaseEleitoral>São Paulo (Capital e Interior)</txtBaseEleitoral><Biografia>Biografia sintética. O texto original foi substituído: é longo e não tem uso no pipeline.</Biografia><Email>gabinete.exemplo@al.sp.gov.br</Email><Matricula>300440</Matricula><NomeParlamentar>Enio Tatto</NomeParlamentar><PlacaVeiculo>AAA0A00</PlacaVeiculo><Sala>01</Sala><Partido>PT</Partido><Telefone>(11) 0000-0000</Telefone></Deputado>
+  <Deputado><IdDeputado>299</IdDeputado><IdSPL>197</IdSPL><IdUA>20408</IdUA><Situacao>EXE</Situacao><Andar>Térreo</Andar><Aniversario>16/01</Aniversario><txtAreaAtuacao>Educação;
+Segurança Pública; 
+Meio Ambiente;
+Assistência Social;</txtAreaAtuacao><txtBaseEleitoral>Interior;
+Capital - Zona Sul</txtBaseEleitoral><Biografia>Biografia sintética. O texto original foi substituído: é longo e não tem uso no pipeline.</Biografia><Email>gabinete.exemplo@al.sp.gov.br</Email><Matricula>300367</Matricula><NomeParlamentar>Jorge Caruso</NomeParlamentar><PlacaVeiculo>AAA0A00</PlacaVeiculo><Sala>T.11</Sala><Partido>MDB</Partido><Telefone>(11) 0000-0000</Telefone></Deputado>
+  <Deputado><IdDeputado>347</IdDeputado><IdSPL>436</IdSPL><IdUA>20367</IdUA><Situacao>EXE</Situacao><Andar>3º</Andar><Aniversario>18/04</Aniversario><txtAreaAtuacao>Empoderamento feminino;
+Rede de Proteção Social;
+Desenvolvimento Regional; 
+Transportes;
+Saúde;
+Segurança Pública; 
+Educação;
+Causa Animal;</txtAreaAtuacao><txtBaseEleitoral>Região Metropolitana de Sorocaba;
+Sudoeste Paulista;
+Região Metropolitana do Vale do Paraíba;</txtBaseEleitoral><Biografia>Biografia sintética. O texto original foi substituído: é longo e não tem uso no pipeline.</Biografia><Email>gabinete.exemplo@al.sp.gov.br</Email><Matricula>300415</Matricula><NomeParlamentar>Maria Lúcia Amary</NomeParlamentar><PlacaVeiculo>AAA0A00</PlacaVeiculo><Sala>309</Sala><Partido>PSD</Partido><Telefone>(11) 0000-0000</Telefone></Deputado>
+  <Deputado><IdDeputado>75</IdDeputado><IdSPL>4926</IdSPL><IdUA>20379</IdUA><Situacao>EXE</Situacao><Andar>2º</Andar><Aniversario>08/12</Aniversario><txtAreaAtuacao>Educação;
+Desenvolvimento Regional; 
+Habitação;
+Saúde;</txtAreaAtuacao><txtBaseEleitoral>Presidente Prudente e região;</txtBaseEleitoral><Biografia>Biografia sintética. O texto original foi substituído: é longo e não tem uso no pipeline.</Biografia><Email>gabinete.exemplo@al.sp.gov.br</Email><Matricula>300098</Matricula><NomeParlamentar>Mauro Bragato</NomeParlamentar><PlacaVeiculo>AAA0A00</PlacaVeiculo><Sala>204</Sala><Partido>PSD</Partido><Telefone>(11) 0000-0000</Telefone></Deputado>
+  <Deputado><IdDeputado>328</IdDeputado><IdSPL>289</IdSPL><IdUA>20374</IdUA><Situacao>EXE</Situacao><Andar>Térreo</Andar><Aniversario>20/08</Aniversario><txtAreaAtuacao>Habitação;
+Funcionalismo Público; 
+Saúde;
+Assistência Social;</txtAreaAtuacao><txtBaseEleitoral>São José do Rio Preto</txtBaseEleitoral><Biografia>Biografia sintética. O texto original foi substituído: é longo e não tem uso no pipeline.</Biografia><Email>gabinete.exemplo@al.sp.gov.br</Email><Matricula>300396</Matricula><NomeParlamentar>Valdomiro Lopes</NomeParlamentar><PlacaVeiculo>AAA0A00</PlacaVeiculo><Sala>T05</Sala><Partido>PSB</Partido><Telefone>(11) 0000-0000</Telefone></Deputado>
+</Deputados>

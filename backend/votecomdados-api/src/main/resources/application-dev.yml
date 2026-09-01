@@ -1,0 +1,10 @@
+# Perfil de desenvolvimento: carrega dados de exemplo além do schema.
+#
+# O seed fica em location separada para que NUNCA seja aplicado em produção
+# por engano — sem o perfil `dev`, o Flyway não enxerga esses arquivos.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed-dev
+logging:
+  level:
+    org.springframework.jdbc.core: debug

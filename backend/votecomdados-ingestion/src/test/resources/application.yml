@@ -1,0 +1,17 @@
+votecomdados:
+  worker:
+    # O SeletorDeJob dispara um job assim que o contexto sobe. Em teste isso
+    # significaria executar ingestão a cada classe de teste — e reclamar de
+    # `--job` ausente no log de todas elas.
+    habilitado: false
+  cpf:
+    # Não protege nada, e não precisa: existe porque a CalculadoraDeHmac se
+    # recusa a subir sem pepper, de propósito. Um valor padrão em código viraria
+    # segredo público no primeiro deploy mal configurado — e ninguém perceberia,
+    # porque tudo continuaria funcionando.
+    pepper: pepper-de-teste
+
+spring:
+  flyway:
+    # Não há API subindo antes para aplicar o schema; aqui o teste é dono dele.
+    enabled: true

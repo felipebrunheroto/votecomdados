@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>br.org.votecomdados</groupId>
+    <artifactId>votecomdados</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>votecomdados-ingestion</artifactId>
+  <name>VoteComDados :: ingestion</name>
+  <description>
+    Worker de ingestão. Job em lote, sem servidor HTTP: sobe, faz o trabalho e
+    morre — é o que permite pagar só pelo tempo de execução.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>br.org.votecomdados</groupId>
+      <artifactId>votecomdados-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!--
+      Sem spring-boot-starter-web de propósito: este artefato não expõe porta.
+      O starter traria Tomcat e um ciclo de vida de servidor que só atrapalha
+      num processo que deve terminar sozinho.
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-flyway</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+    <!--
+      Escopo `compile`, ao contrário da API: o worker usa o `CopyManager` do
+      driver diretamente. É o COPY que torna viável carregar arquivos anuais de
+      dezenas de MB — inserir linha a linha transformaria minutos em horas.
+    -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+    </dependency>
+    <!--
+      É o STARTER, não a biblioteca solta: no Spring Boot 4 as
+      auto-configurações vivem em módulos próprios, e ter `jackson-databind` no
+      classpath compila mas não registra o bean `ObjectMapper` — a aplicação
+      sobe e quebra na injeção. Mesma pegadinha do `flyway-core` acima.
+
+      Jackson 3 (`tools.jackson`), não o 2 (`com.fasterxml`).
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jackson</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

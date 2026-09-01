@@ -1,0 +1,1139 @@
+{
+	"info": {
+		"_postman_id": "1d208804-1094-57e7-a8b9-9c7e4361bf8d",
+		"name": "VoteComDados - API local",
+		"description": "Todos os endpoints da API, contra o ambiente local.\n\n**Antes de rodar:**\n```bash\ncd backend && docker compose up\n```\nAguarde `localhost:8080/actuator/health/readiness` responder `UP`.\n\nAs requisições trazem testes que verificam o contrato de `docs/API.md`, não só o código HTTP. Rodar a coleção inteira (Run collection) funciona como teste de fumaça da API.\n\nOs ids em Variables correspondem ao seed do perfil `dev`.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "0"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"description": "Raiz da API local"
+		},
+		{
+			"key": "idCandidatoComAtuacao",
+			"value": "a1000000-0000-4000-8000-000000000001",
+			"description": "Adriana Ventura - trajetória nos 3 níveis, atuação federal e na Alesp"
+		},
+		{
+			"key": "idCandidatoSemAtuacao",
+			"value": "a1000000-0000-4000-8000-000000000002",
+			"description": "Joana Alcântara - sem mandato anterior (o caso da maioria)"
+		},
+		{
+			"key": "idCandidatoPre2001",
+			"value": "a1000000-0000-4000-8000-000000000003",
+			"description": "Adilson Barroso - registro indeferido e mandato de 1998"
+		},
+		{
+			"key": "idCandidatoOutroEstado",
+			"value": "a1000000-0000-4000-8000-000000000004",
+			"description": "Adolfo Viana (BA) - atuação estadual fora do escopo do MVP"
+		},
+		{
+			"key": "idProposicao",
+			"value": "1197773",
+			"description": "PL 4015/2023 - tem coautores fora da coorte"
+		},
+		{
+			"key": "idVotacaoNominal",
+			"value": "555111"
+		},
+		{
+			"key": "idVotacaoSimbolica",
+			"value": "555112",
+			"description": "Sem voto individual: placar deve vir nulo"
+		},
+		{
+			"key": "idVotacaoComissao",
+			"value": "777001",
+			"description": "Alesp - voto de comissão, não de plenário"
+		},
+		{
+			"key": "idVotacaoSecreta",
+			"value": "888001"
+		}
+	],
+	"item": [
+		{
+			"name": "0. Saúde",
+			"description": "Confirme que a API subiu antes de rodar o resto.",
+			"item": [
+				{
+					"name": "Readiness (usado pelo balanceador)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/actuator/health/readiness",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"actuator",
+								"health",
+								"readiness"
+							]
+						},
+						"description": "Contém APENAS o Postgres. Redis nunca entra aqui: cache fora do ar marcaria toda a frota como insalubre e o balanceador a esvaziaria."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('status UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+								]
+							}
+						}
+					],
+					"id": "d1c1287b-aa1a-5c39-a43c-ac372162af68",
+					"response": []
+				},
+				{
+					"name": "Liveness",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/actuator/health/liveness",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"actuator",
+								"health",
+								"liveness"
+							]
+						},
+						"description": "Só o processo. Nunca verifica dependência externa - liveness que falha por rede causa reinício em loop."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"id": "a2feeafd-9c90-567b-bfe1-f01b168a0a2a",
+					"response": []
+				}
+			],
+			"id": "720c5896-7e82-525b-b1d8-7635664baaa4"
+		},
+		{
+			"name": "1. Busca de candidatos",
+			"item": [
+				{
+					"name": "Listar (padrão)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos?pageSize=5",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos"
+							],
+							"query": [
+								{
+									"key": "pageSize",
+									"value": "5",
+									"description": ""
+								}
+							]
+						},
+						"description": "Só quem tem registro de candidatura em 2026."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"const b = pm.response.json();",
+									"pm.test('envelope de paginação', () => {",
+									"    pm.expect(b).to.have.property('data');",
+									"    pm.expect(b.pagination).to.include.keys('page', 'pageSize', 'total');",
+									"});",
+									"pm.test('cada item traz possuiAtuacaoLegislativa', () =>",
+									"    b.data.forEach(p => pm.expect(p).to.have.property('possuiAtuacaoLegislativa')));"
+								]
+							}
+						}
+					],
+					"id": "2e6d8fe5-ee02-5b3f-b94c-77d0f9590404",
+					"response": []
+				},
+				{
+					"name": "Buscar por nome (sem acento)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos?q=acacio",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos"
+							],
+							"query": [
+								{
+									"key": "q",
+									"value": "acacio",
+									"description": "nome civil ou de urna; máx. 100 caracteres"
+								}
+							]
+						},
+						"description": "A busca normaliza acentuação: 'acacio' encontra 'Acácio'."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"const d = pm.response.json().data;",
+									"pm.test('encontrou apesar do acento', () => {",
+									"    pm.expect(d.length).to.be.above(0);",
+									"    pm.expect(d[0].nomeCivil).to.include('Acácio');",
+									"});"
+								]
+							}
+						}
+					],
+					"id": "78307e33-1af9-5c88-a336-9637d89eafe8",
+					"response": []
+				},
+				{
+					"name": "Filtrar por cargo e UF",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos?cargo=SENADOR&uf=SP",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos"
+							],
+							"query": [
+								{
+									"key": "cargo",
+									"value": "SENADOR",
+									"description": "PRESIDENTE | GOVERNADOR | SENADOR | DEPUTADO_FEDERAL | ..."
+								},
+								{
+									"key": "uf",
+									"value": "SP",
+									"description": ""
+								}
+							]
+						},
+						"description": "Cargo aceita qualquer valor do enum, inclusive municipais no histórico."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('respeita o filtro de UF', () =>",
+									"    pm.response.json().data.forEach(p => pm.expect(p.uf).to.eql('SP')));"
+								]
+							}
+						}
+					],
+					"id": "4720cb74-64d0-53d0-a5c7-616b7176783f",
+					"response": []
+				},
+				{
+					"name": "Somente com mandato anterior",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos?comAtuacao=true&pageSize=100",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos"
+							],
+							"query": [
+								{
+									"key": "comAtuacao",
+									"value": "true",
+									"description": ""
+								},
+								{
+									"key": "pageSize",
+									"value": "100",
+									"description": ""
+								}
+							]
+						},
+						"description": "A grande maioria dos ~28 mil candidatos não tem mandato legislativo. Este filtro alimenta a lista de pré-renderização do frontend."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('todos têm atuação', () =>",
+									"    pm.response.json().data.forEach(p =>",
+									"        pm.expect(p.possuiAtuacaoLegislativa).to.be.true));"
+								]
+							}
+						}
+					],
+					"id": "5fc1d5ba-2653-5a32-a4f6-5e32a5318c56",
+					"response": []
+				}
+			],
+			"id": "a0a37278-73f5-54b6-b498-cb83e8982bd4"
+		},
+		{
+			"name": "2. Perfil do candidato",
+			"item": [
+				{
+					"name": "Perfil completo (3 níveis)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos/{{idCandidatoComAtuacao}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos",
+								"{{idCandidatoComAtuacao}}"
+							]
+						},
+						"description": "Trajetória do TSE cobrindo municipal, estadual e federal, mais a cobertura declarada por esfera."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"const b = pm.response.json();",
+									"pm.test('trajetória vem da mais recente para a mais antiga', () => {",
+									"    const anos = b.trajetoria.map(c => c.anoEleicao);",
+									"    pm.expect(anos).to.eql([...anos].sort((a, z) => z - a));",
+									"});",
+									"pm.test('cobre os três níveis', () => {",
+									"    const esferas = b.trajetoria.map(c => c.esfera);",
+									"    ['FEDERAL', 'ESTADUAL', 'MUNICIPAL'].forEach(e =>",
+									"        pm.expect(esferas).to.include(e));",
+									"});",
+									"pm.test('SP resolve para a Alesp, não para o fallback genérico', () => {",
+									"    const alesp = b.cobertura.find(c =>",
+									"        c.esfera === 'ESTADUAL' && c.uf === 'SP' && c.recurso === 'voto_nominal');",
+									"    pm.expect(alesp.status).to.eql('NAO_PUBLICADO_PELA_FONTE');",
+									"});"
+								]
+							}
+						}
+					],
+					"id": "a2e6dc18-0ccd-5d61-8767-34519aaf4c82",
+					"response": []
+				},
+				{
+					"name": "Candidato sem mandato anterior",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos/{{idCandidatoSemAtuacao}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos",
+								"{{idCandidatoSemAtuacao}}"
+							]
+						},
+						"description": "O caso da maioria. O perfil existe; as listas é que vêm vazias."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('sinaliza ausência de atuação', () =>",
+									"    pm.expect(pm.response.json().possuiAtuacaoLegislativa).to.be.false);"
+								]
+							}
+						}
+					],
+					"id": "993cda52-f4a8-5591-bcd6-42b82a0da158",
+					"response": []
+				},
+				{
+					"name": "Candidato de outro estado (fora do escopo)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos/{{idCandidatoOutroEstado}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos",
+								"{{idCandidatoOutroEstado}}"
+							]
+						},
+						"description": "Fora de SP a atuação estadual não é coberta nesta versão - e isso é diferente de 'a fonte não publica'."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('estadual cai em FORA_DO_ESCOPO_MVP', () => {",
+									"    const est = pm.response.json().cobertura.filter(c => c.esfera === 'ESTADUAL');",
+									"    pm.expect(est.length).to.be.above(0);",
+									"    est.forEach(c => pm.expect(c.status).to.eql('FORA_DO_ESCOPO_MVP'));",
+									"});"
+								]
+							}
+						}
+					],
+					"id": "ce73585e-95a8-5447-834f-a7c39851a691",
+					"response": []
+				},
+				{
+					"name": "Projetos apresentados",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos/{{idCandidatoComAtuacao}}/proposicoes?page=1&pageSize=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos",
+								"{{idCandidatoComAtuacao}}",
+								"proposicoes"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": ""
+								},
+								{
+									"key": "pageSize",
+									"value": "20",
+									"description": ""
+								}
+							]
+						},
+						"description": "Autoria do candidato, federal e estadual."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('cada matéria traz link para a fonte oficial', () =>",
+									"    pm.response.json().data.forEach(p =>",
+									"        pm.expect(p.urlTramitacao).to.be.a('string').and.not.empty));"
+								]
+							}
+						}
+					],
+					"id": "17fb0c1f-2a72-5472-80e0-ac3b4beb9b8f",
+					"response": []
+				},
+				{
+					"name": "Votações",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos/{{idCandidatoComAtuacao}}/votacoes",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos",
+								"{{idCandidatoComAtuacao}}",
+								"votacoes"
+							]
+						},
+						"description": "O rótulo original da fonte é obrigatório em votação nominal: o enum é interpretação nossa, a string é o fato."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"const d = pm.response.json().data;",
+									"pm.test('voto da Alesp preserva o rótulo livre e marca comissão', () => {",
+									"    const alesp = d.find(v => v.votoOrigem === 'Favorável ao parecer');",
+									"    pm.expect(alesp.ambito).to.eql('COMISSAO');",
+									"});",
+									"pm.test('obstrução vem com nota de metodologia', () => {",
+									"    const o = d.find(v => v.voto === 'OBSTRUCAO');",
+									"    pm.expect(o.notaMetodologica).to.include('mérito');",
+									"});",
+									"pm.test('voto em separado da Alesp não vira abstenção nem favorável', () => {",
+									"    const sep = d.find(v => v.voto === 'VOTO_EM_SEPARADO');",
+									"    pm.expect(sep.votoOrigem).to.eql('Com o Voto em Separado');",
+									"    pm.expect(sep.notaMetodologica).to.include('não diz');",
+									"});",
+									"pm.test('participação em votação secreta do Senado não é ausência', () => {",
+									"    const secreto = d.find(v => v.casa === 'SENADO');",
+									"    pm.expect(secreto.voto).to.eql('SECRETO');",
+									"    pm.expect(secreto.origemRegistro).to.eql('FONTE');",
+									"});"
+								]
+							}
+						}
+					],
+					"id": "9e562772-4773-5e99-9ae2-a8381c5fe570",
+					"response": []
+				},
+				{
+					"name": "Votações de mandato anterior a 2001",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos/{{idCandidatoPre2001}}/votacoes",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos",
+								"{{idCandidatoPre2001}}",
+								"votacoes"
+							]
+						},
+						"description": "A Câmara não publica voto individual antes de 2001. A lista vem vazia por limite da fonte, não por falha da plataforma."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('lista vazia', () =>",
+									"    pm.expect(pm.response.json().data.length).to.eql(0));"
+								]
+							}
+						}
+					],
+					"id": "11022dfa-48c7-564e-97ab-6733cdf47944",
+					"response": []
+				}
+			],
+			"id": "af4d4aaf-bd54-5f5d-9503-908bafc6fc89"
+		},
+		{
+			"name": "3. Detalhes",
+			"item": [
+				{
+					"name": "Proposição (autoria completa)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/proposicoes/{{idProposicao}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"proposicoes",
+								"{{idProposicao}}"
+							]
+						},
+						"description": "Coautores fora da coorte vêm com politicoId nulo: aparecem pelo nome, sem perfil. Omiti-los distorceria o registro da matéria."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"const a = pm.response.json().autores;",
+									"pm.test('há coautor sem perfil', () =>",
+									"    pm.expect(a.some(x => x.politicoId === null)).to.be.true);",
+									"pm.test('há autor com perfil', () =>",
+									"    pm.expect(a.some(x => x.politicoId !== null)).to.be.true);"
+								]
+							}
+						}
+					],
+					"id": "2d4d7df4-8bd4-5932-96f9-130e739ec3b2",
+					"response": []
+				},
+				{
+					"name": "Votação nominal (com placar)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/votacoes/{{idVotacaoNominal}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"votacoes",
+								"{{idVotacaoNominal}}"
+							]
+						},
+						"description": "'outros' agrupa ausências e obstruções - não são posição sobre o mérito."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"const b = pm.response.json();",
+									"pm.test('placar preenchido', () =>",
+									"    pm.expect(b.placar).to.include.keys('sim', 'nao', 'abstencao', 'outros'));",
+									"pm.test('é de plenário', () => pm.expect(b.ambito).to.eql('PLENARIO'));"
+								]
+							}
+						}
+					],
+					"id": "e8944c95-69bb-58ce-92cc-a186768989ae",
+					"response": []
+				},
+				{
+					"name": "Votação simbólica (placar nulo)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/votacoes/{{idVotacaoSimbolica}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"votacoes",
+								"{{idVotacaoSimbolica}}"
+							]
+						},
+						"description": "Placar nulo, não zero: zero sugeriria que ninguém votou, quando o que ocorre é que a Casa não registra o voto individual."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"const b = pm.response.json();",
+									"pm.test('placar é nulo, não zero', () => pm.expect(b.placar).to.be.null);",
+									"pm.test('explica a ausência', () =>",
+									"    pm.expect(b.observacao).to.include('não o voto de cada parlamentar'));"
+								]
+							}
+						}
+					],
+					"id": "fa3de321-4718-5197-9ebe-a4238e9c4be1",
+					"response": []
+				},
+				{
+					"name": "Votação em comissão",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/votacoes/{{idVotacaoComissao}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"votacoes",
+								"{{idVotacaoComissao}}"
+							]
+						},
+						"description": "Voto de comissão não tem o mesmo peso de deliberação em plenário; o campo ambito é o que impede a confusão."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('marcada como comissão', () =>",
+									"    pm.expect(pm.response.json().ambito).to.eql('COMISSAO'));"
+								]
+							}
+						}
+					],
+					"id": "fabdf245-b279-541a-9609-074ff00b8e2f",
+					"response": []
+				},
+				{
+					"name": "Votação secreta (Senado)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/votacoes/{{idVotacaoSecreta}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"votacoes",
+								"{{idVotacaoSecreta}}"
+							]
+						},
+						"description": "Secreta é NOMINAL, não simbólica: a Casa registra quem participou, só não como cada um votou. Placar nulo pelo mesmo motivo da simbólica."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"const b = pm.response.json();",
+									"pm.test('secreta continua NOMINAL', () => pm.expect(b.tipo).to.eql('NOMINAL'));",
+									"pm.test('placar é nulo, não zero', () => pm.expect(b.placar).to.be.null);",
+									"pm.test('explica que é secreta, não simbólica', () =>",
+									"    pm.expect(b.observacao).to.include('não como cada parlamentar votou'));"
+								]
+							}
+						}
+					],
+					"id": "1dc72b33-8300-4cf4-aeb7-f8c447a122d7",
+					"response": []
+				}
+			],
+			"id": "0c756c1d-72da-532f-bdda-fc456e5ad2f5"
+		},
+		{
+			"name": "4. Metadados",
+			"item": [
+				{
+					"name": "Frescor por fonte",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/meta/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"meta",
+								"status"
+							]
+						},
+						"description": "A data é sempre da última execução BEM-SUCEDIDA, mesmo quando a execução mais recente falhou - no seed, a Alesp está em FALHA."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 200', () => pm.response.to.have.status(200));",
+									"const f = pm.response.json().fontes;",
+									"pm.test('reporta falha sem perder a última data boa', () => {",
+									"    const alesp = f.find(x => x.fonte === 'ALESP');",
+									"    pm.expect(alesp.status).to.eql('FALHA');",
+									"    pm.expect(alesp.ultimaAtualizacao).to.be.a('string');",
+									"});"
+								]
+							}
+						}
+					],
+					"id": "36085e49-1ceb-5c52-a98b-877ce4cc2c4d",
+					"response": []
+				}
+			],
+			"id": "dce65eb1-e7dc-5932-9f63-239d198dd914"
+		},
+		{
+			"name": "5. Erros e limites",
+			"description": "O comportamento sob entrada inválida também é contrato.",
+			"item": [
+				{
+					"name": "Candidato inexistente -> 404",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos/00000000-0000-4000-8000-000000000000",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos",
+								"00000000-0000-4000-8000-000000000000"
+							]
+						},
+						"description": "404 também para quem não é candidato em 2026: essas pessoas não têm registro pessoal na base."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 404', () => pm.response.to.have.status(404));",
+									"pm.test('envelope de erro padrão', () => {",
+									"    const e = pm.response.json().error;",
+									"    pm.expect(e.code).to.eql('NOT_FOUND');",
+									"    pm.expect(e.message).to.be.a('string');",
+									"});"
+								]
+							}
+						}
+					],
+					"id": "d3a3bd52-0db3-587e-9840-2ab1508dd664",
+					"response": []
+				},
+				{
+					"name": "Proposição inexistente -> 404",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/proposicoes/99999999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"proposicoes",
+								"99999999"
+							]
+						},
+						"description": "Mesmo envelope de erro de todos os endpoints."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 404', () => pm.response.to.have.status(404));",
+									"pm.test('code NOT_FOUND', () =>",
+									"    pm.expect(pm.response.json().error.code).to.eql('NOT_FOUND'));"
+								]
+							}
+						}
+					],
+					"id": "c9955105-2cb2-5b7e-910e-122203f47900",
+					"response": []
+				},
+				{
+					"name": "pageSize acima do teto -> 400",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos?pageSize=500",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos"
+							],
+							"query": [
+								{
+									"key": "pageSize",
+									"value": "500",
+									"description": ""
+								}
+							]
+						},
+						"description": "Teto de 100 validado no servidor: a busca textual é o endpoint mais caro de servir e o mais barato de atacar."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 400', () => pm.response.to.have.status(400));",
+									"pm.test('diz qual parâmetro violou', () =>",
+									"    pm.expect(pm.response.json().error.message).to.include('pageSize'));"
+								]
+							}
+						}
+					],
+					"id": "7f400194-f07d-55ce-8d7d-93dad6f3d363",
+					"response": []
+				},
+				{
+					"name": "q acima de 100 caracteres -> 400",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos?q=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos"
+							],
+							"query": [
+								{
+									"key": "q",
+									"value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+									"description": ""
+								}
+							]
+						},
+						"description": "Limita o custo da busca trigram por requisição."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 400', () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"id": "83029c34-a2ef-50ce-88af-b28c0f2d6541",
+					"response": []
+				},
+				{
+					"name": "Cargo inválido -> 400",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/politicos?cargo=IMPERADOR",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"politicos"
+							],
+							"query": [
+								{
+									"key": "cargo",
+									"value": "IMPERADOR",
+									"description": ""
+								}
+							]
+						},
+						"description": "Valor fora do enum é rejeitado, não ignorado em silêncio."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde 400', () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"id": "e8f99227-86a0-592e-b9d2-eaa1bcbc4ddb",
+					"response": []
+				}
+			],
+			"id": "62037d7e-a340-5b66-badc-e53b3dc2eada"
+		}
+	],
+	"_postman_exported_at": "2026-08-30T14:13:28.913Z",
+	"_postman_exported_using": "Postman/11.0.0"
+}
