@@ -151,22 +151,41 @@ código real — `test` (1m36s), `guards` (19s), `build` (35s), `newman`
 quebra algum deles de propósito é bloqueado — verificação natural da
 próxima vez que algo realmente quebrar, não simulada aqui.
 
-### Fase 2 — Segurança de código e supply chain (ainda sem nuvem)
+### Fase 2 — Segurança de código e supply chain ✅ Entregue (02/09/2026)
 
-1. `dependabot.yml`: ecossistemas `maven`, `npm`, `github-actions` e
-   `docker` (este último só passa a ter algo para escanear a partir da
-   Fase 3).
-2. `.github/workflows/codeql.yml`: análise Java + JavaScript/TypeScript,
-   agendada + em todo PR.
-3. Ativar secret scanning e push protection nas configurações do
-   repositório (requer D1 = público, ou GHAS).
-4. `.github/workflows/trivy-fs.yml`: `trivy fs` no backend e no frontend —
-   CVE em dependência antes mesmo de existir imagem Docker.
+1. `dependabot.yml`: ecossistemas `maven` (backend), `npm` (três diretórios
+   — `web`, `tools`, `backend/postman`, cada um com seu próprio
+   `package-lock.json`) e `github-actions`, semanal, com minor/patch
+   agrupados num PR só por ecossistema (major fica de fora do agrupamento —
+   merece revisão isolada). `docker` fica para a Fase 3, quando existir
+   Dockerfile para escanear.
+2. `.github/workflows/codeql.yml`: `java-kotlin` (build **manual**, não
+   autobuild — mesma preferência por explícito do resto do backend, ver
+   ADR de `JdbcClient` em [ARQUITETURA.md § 11](ARQUITETURA.md#11-decisões-de-arquitetura))
+   + `javascript-typescript`, em todo PR e semanalmente (segunda, 06:00 UTC).
+3. Secret scanning, push protection, Dependabot alerts e Dependabot
+   security updates — todos habilitados via API do GitHub (D1 = público
+   tornou isso gratuito).
+4. `.github/workflows/trivy-fs.yml`: `trivy fs` nas quatro árvores de
+   dependência (`backend`, `web`, `tools`, `backend/postman`), matriz de 4
+   jobs. Bloqueia só `CRITICAL` **com correção disponível**
+   (`ignore-unfixed: true`) — travar o merge por uma CVE sem patch não
+   protege nada, só empata o repositório numa vulnerabilidade que ninguém
+   consegue corrigir ainda.
+
+Ao escrever os workflows, toda versão de action fixada (`actions/checkout`,
+`actions/setup-java`, `actions/setup-node`, `github/codeql-action`,
+`aquasecurity/trivy-action`) foi conferida contra a API de releases do
+GitHub antes de commitar — os primeiros palpites (`@v4`/`@v3`/`@v0.28.0`)
+estavam desatualizados; `actionlint` sozinho não pega isso, porque a tag
+existe sintaticamente mesmo quando é a errada.
 
 **Como se prova:** introduzir de propósito uma dependência com CVE conhecida
 num branch de teste e confirmar que o Dependabot/Trivy sinalizam antes do
 merge; confirmar que um segredo de teste (chave falsa, formato reconhecível)
-é bloqueado no `push`, não só denunciado depois.
+é bloqueado no `push`, não só denunciado depois. Ainda não executado —
+fica para a primeira vez que um Dependabot PR ou um CodeQL finding reais
+aparecerem.
 
 ### Fase 3 — Containerização
 
