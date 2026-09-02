@@ -7,7 +7,7 @@
     "validar-mermaid": "node validar-mermaid.mjs ../docs/*.md"
   },
   "dependencies": {
-    "jsdom": "^24.0.0",
+    "jsdom": "^30.0.1",
     "mermaid": "^11.17.2"
   }
 }
