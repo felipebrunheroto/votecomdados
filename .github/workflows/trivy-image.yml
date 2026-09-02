@@ -1,0 +1,58 @@
+name: Trivy (imagem)
+
+# Fase 3 do plano DevSecOps/IaC. Builda as duas imagens do backend e roda
+# o MESMO Trivy da Fase 2 (docs/PLANO_DEVSECOPS_IAC.md § 4 — uma ferramenta
+# cobrindo imagem, IaC e SBOM), agora contra a imagem final, não só a
+# árvore de dependências fonte. Publica o SBOM (CycloneDX) como artefato do
+# build — rastreabilidade de supply chain coerente com a missão de
+# transparência do projeto.
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**"]
+  pull_request:
+    paths: ["backend/**"]
+
+concurrency:
+  group: trivy-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        modulo: [votecomdados-api, votecomdados-ingestion]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: build da imagem
+        working-directory: backend
+        run: docker build -f ${{ matrix.modulo }}/Dockerfile -t ${{ matrix.modulo }}:${{ github.sha }} .
+
+      - name: trivy image — bloqueia CRITICAL com correção disponível
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.modulo }}:${{ github.sha }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.modulo }}:${{ github.sha }}
+          format: cyclonedx
+          output: sbom-${{ matrix.modulo }}.cdx.json
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sbom-${{ matrix.modulo }}
+          path: sbom-${{ matrix.modulo }}.cdx.json
+          retention-days: 90

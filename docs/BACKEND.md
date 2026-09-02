@@ -318,13 +318,25 @@ o filtro é uma consulta SQL, sem rede.
 | Contrato | RestAssured contra o OpenAPI gerado | Resposta de cada endpoint bate com `API.md` |
 | Ingestão | WireMock (stub Câmara/Senado/TSE) + Testcontainers | Paginação, retry/backoff, idempotência (rodar o job 2x = mesmo resultado) |
 
-## 7. Empacotamento e deploy
+## 7. Empacotamento e deploy ✅ Dockerfiles entregues (02/09/2026)
 
 Build multi-módulo Maven → cada módulo deployável (`api`, `ingestion`)
 gera um fat jar Spring Boot → imagem Docker multi-stage
 (`eclipse-temurin:21-jre-alpine` no runtime, para manter a imagem e o
 footprint de memória pequenos) → push para ECR → dois recursos ECS
 distintos:
+
+`votecomdados-api/Dockerfile` e `votecomdados-ingestion/Dockerfile` — o
+contexto de build é `backend/`, não o diretório do módulo, porque o reator
+Maven precisa do pom.xml pai e de `votecomdados-core`. Usuário não-root em
+ambas; `-XX:MaxRAMPercentage=75` no `ENTRYPOINT` (ver nota abaixo).
+Verificado localmente: as duas imagens buildam, a API sobe contra um
+Postgres real, aplica as 13 migrations, responde `200` em
+`/api/v1/politicos/{id}` e `{"status":"UP"}` em `/actuator/health/readiness`,
+e desliga sem travar no `docker stop`. `.github/workflows/trivy-image.yml`
+(Fase 3 de [PLANO_DEVSECOPS_IAC.md](PLANO_DEVSECOPS_IAC.md)) builda as duas
+a cada mudança em `backend/**`, escaneia e publica o SBOM (CycloneDX) de
+cada uma como artefato do workflow.
 
 - `votecomdados-api`: ECS **Service** (long-running, atrás do ALB, health
   check em `/actuator/health`) — linha "ECS Fargate — API" do plano de
