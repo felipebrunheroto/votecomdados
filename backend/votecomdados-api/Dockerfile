@@ -25,7 +25,7 @@ COPY votecomdados-api/src votecomdados-api/src
 
 RUN mvn -B -ntp -pl votecomdados-api -am -DskipTests package
 
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 RUN addgroup -S votecomdados && adduser -S votecomdados -G votecomdados
 USER votecomdados
 WORKDIR /app
