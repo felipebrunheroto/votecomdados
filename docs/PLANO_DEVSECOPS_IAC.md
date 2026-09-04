@@ -278,32 +278,83 @@ initialized!", com `use_lockfile=true`. Verificação de recuperação a partir
 de uma segunda máquina fica adiada — sem necessidade prática ainda, com um
 único operador.
 
-### Fase 5 — Módulos Terraform
+### Fase 5 — Módulos Terraform ✅ Entregue (04/09/2026)
 
-Uma única árvore, `infra/`, com os módulos que a tabela de mapeamento de
+Uma única árvore, `infra/`, com os recursos que a tabela de mapeamento de
 [ARQUITETURA.md § 2](ARQUITETURA.md#2-nível-2--diagrama-de-containers) já
 define para AWS:
 
-| Módulo | Conteúdo |
+| Arquivo | Conteúdo |
 |---|---|
-| `networking` | VPC pública, security groups, **sem** NAT Gateway |
-| `compute` | cluster ECS, service da API, task definition do worker |
-| `banco` | RDS PostgreSQL single-AZ, PITR, `db.t4g.small` |
-| `edge` | S3 + CloudFront, Custom Error Response 403/404→200 |
-| `borda-de-seguranca` | WAF web ACL, regra rate-based |
-| `dns` | Route 53 hosted zone |
-| `segredos` | Secrets Manager (recursos declarados, **valores** injetados fora do state — `sensitive = true`, nunca em `.tfvars` versionado) |
-| `scheduler` | EventBridge Scheduler (cron de ingestão) |
-| `observabilidade` | CloudWatch: os três alarmes de [ARQUITETURA.md § 9](ARQUITETURA.md#operação-um-operador-sob-demanda-sem-plantão) (billing 50/80/100%, 5xx sustentado, ingestão falhou 2 dias) como recursos, não só como prosa |
-| `iam` | roles de execução ECS com menor privilégio; role de deploy do GitHub Actions via **OIDC**, sem chave estática de longa duração |
+| `networking.tf` | VPC pública, security groups, **sem** NAT Gateway |
+| `compute.tf` | cluster ECS, service da API (2 tasks), task definition do worker, ALB |
+| `database.tf` | RDS PostgreSQL single-AZ, PITR, `db.t4g.small`, credencial gerenciada pela AWS |
+| `edge.tf` | S3 + CloudFront, Custom Error Response 403/404→200 |
+| `security.tf` | WAF web ACL, regra rate-based — no ALB, não na CDN (ver nota) |
+| `dns.tf` | Route 53 hosted zone + certificado ACM |
+| `secrets.tf` | Secrets Manager para o pepper do HMAC |
+| `scheduler.tf` | EventBridge Scheduler (cron diário de ingestão + snapshot mensal do RDS) |
+| `observability.tf` | CloudWatch: os três alarmes de [ARQUITETURA.md § 9](ARQUITETURA.md#operação-um-operador-sob-demanda-sem-plantão) como recursos, não só como prosa |
+| `iam.tf`, `ecr.tf` | roles de execução ECS, role de deploy do GitHub Actions via **OIDC** |
 
-Cada módulo é escaneado por `trivy config` no PR (Fase 2, mesma ferramenta,
-sem tool nova).
+**Desvio deliberado do desenho original:** "módulos Terraform" aqui virou
+arquivos `.tf` no mesmo diretório, não módulos reutilizáveis
+(`module { source = ... }`). Só existe um ambiente (produção, sem
+staging), então a reutilização que módulos existem para dar não se aplica
+— seria abstração sem consumidor, a mesma lição de "três linhas parecidas
+é melhor que abstração prematura" já usada em outras decisões deste
+projeto.
 
-**Como se prova:** `terraform plan` roda limpo; `terraform apply` num
-ambiente de teste sobe uma stack completa; destruição (`terraform destroy`)
-limpa tudo sem recurso órfão — testado antes de qualquer aplicação em conta
-real de produção.
+**Dois bugs reais achados por `terraform validate`, não hipotéticos:**
+
+1. Ciclo de dependência entre `ecs_api` e `rds` (e depois `alb`/`ecs_api`):
+   dois security groups com regra inline referenciando o `.id` um do
+   outro. Resolvido com `aws_vpc_security_group_ingress_rule`/`egress_rule`
+   como recursos avulsos, criados depois que ambos os SGs já têm ID
+   conhecido — documentado inline em `networking.tf`.
+2. Descrição de regra de security group com acento (`"HTTPS público"`)
+   rejeitada pela própria validação de schema do provider AWS — o charset
+   permitido não inclui letra acentuada nem travessão. Todas as
+   descrições de SG neste arquivo foram reescritas sem acento.
+
+**Gap novo, achado nesta fase:** `backend/votecomdados-ingestion/src/main/
+resources/logback-spring.xml` usa texto puro
+(`%d{...} %-5level [%thread] ... - %msgSeguro%n`), não JSON — apesar de
+BACKEND.md § 3 descrever "Logback + logstash-logback-encoder". Afeta o
+metric filter do alarme de "ingestão falhou 2 dias" (`observability.tf`),
+que usa um padrão de texto simples (`pattern = "ERROR"`) em vez de um
+filtro JSON — funciona, mas é outra divergência doc-vs-código para a lista
+de follow-ups, ao lado da separação de credencial API/worker.
+
+**Decisão pragmática de IAM, registrada por transparência:** a role de
+deploy do GitHub Actions usa `PowerUserAccess` (tudo, exceto IAM/
+Organizations) mais uma policy extra escopada só às ações de IAM que este
+projeto precisa (`arn:aws:iam::*:role/votecomdados-*`). Least-privilege
+ação-por-ação para uma role que aplica Terraform sobre
+ECS+RDS+S3+CloudFront+WAF+Route53+Secrets Manager+EventBridge+CloudWatch+
+IAM seria impraticável de manter à mão. A mitigação real continua sendo
+D4 (aprovação manual do `apply`), não a granularidade da policy — ver
+`infra/iam.tf` para o raciocínio completo.
+
+**`trivy config .`: 8 achados, todos avaliados, não escondidos.** Cinco
+suprimidos via `infra/.trivyignore.yaml` (mecanismo documentado do Trivy —
+comentários inline `#trivy:ignore:` se mostraram inconsistentes nesta
+versão, 0.74.0: funcionaram para 3 achados e não para outros 5 com
+posicionamento idêntico, sem explicação encontrada na documentação
+oficial). Os três que o `.trivyignore.yaml` também não suprimiu (AWS-0164,
+AWS-0178, AWS-0136) permanecem visíveis no scan, mas têm a mesma
+justificativa registrada no arquivo — nenhum é um risco não avaliado, só
+uma inconsistência da ferramenta em aplicar a supressão.
+
+**Como se prova:** `terraform fmt`/`validate` limpos (não precisam de
+credencial AWS — só sintaxe e consistência interna). `trivy config .`
+rodado e triado achado por achado. **`terraform plan`/`apply` ainda não
+foram rodados contra a conta real** — por decisão D3b, esta sessão nunca
+segurou credencial AWS, e a Fase 4 só criou o bucket de state e o provider
+OIDC, não uma credencial ampla o bastante para aplicar toda essa
+infraestrutura. Isso é trabalho da Fase 6 (pipeline) ou de uma primeira
+aplicação manual guiada, ainda não feita — declarado em aberto, não
+assumido como testado.
 
 ### Fase 6 — Pipeline de plan/apply
 

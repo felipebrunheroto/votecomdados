@@ -1,0 +1,59 @@
+# Achados aceitos do `trivy config .` — cada um tem a justificativa
+# completa como comentário no arquivo .tf correspondente; aqui fica só o
+# registro central de QUE foram avaliados e aceitos, não escondidos.
+#
+# Comentários inline `#trivy:ignore:` se mostraram inconsistentes nesta
+# versão do Trivy (0.74.0) — funcionaram para AWS-0104 e não para os
+# outros, mesmo com posicionamento idêntico (linha imediatamente acima do
+# recurso, sem linha em branco). Sem documentação oficial cobrindo a
+# sintaxe inline no momento da checagem (trivy.dev/latest/docs/
+# configuration/filtering/ só documenta .trivyignore/.trivyignore.yaml e
+# políticas Rego), este arquivo é o mecanismo real — não decoração.
+
+- id: AWS-0053
+  statement: >-
+    ALB exposto à internet, de propósito: é a API pública do produto, sem
+    autenticação de usuário final por desenho (ARQUITETURA.md § 10). O
+    WAF (infra/security.tf) é a mitigação real.
+
+- id: AWS-0164
+  statement: >-
+    IP público nas subnets é o preço explícito de não ter NAT Gateway
+    (ARQUITETURA.md § 9/§ 11, CUSTOS_INFRA_AWS.md). RDS nunca fica
+    exposto de qualquer forma: publicly_accessible = false.
+
+- id: AWS-0178
+  statement: >-
+    Sem VPC Flow Logs: os security groups já são restritivos por
+    construção. Sem operador dedicado a revisar logs de borda
+    regularmente nesta escala (operador único, sem plantão).
+
+- id: AWS-0176
+  statement: >-
+    RDS sem autenticação IAM — mesmo gap conhecido da separação de
+    credencial API/worker (ver database.tf), pendente de mudança de
+    código de aplicação, não de infraestrutura isolada.
+
+- id: AWS-0011
+  statement: >-
+    CloudFront sem WAF, de propósito: o único web ACL do plano protege o
+    ALB/API (endpoint caro de atacar), não a CDN estática. Ver
+    infra/security.tf.
+
+- id: AWS-0010
+  statement: >-
+    CloudFront sem access logging: tráfego já observável via CloudWatch
+    (ALB); duplicar em S3 é custo sem operador dedicado a revisar.
+
+- id: AWS-0132
+  statement: >-
+    Bucket do frontend com SSE-S3 (chave da AWS), não CMK — conteúdo já
+    público (export do site + dados abertos CC BY 4.0), sem necessidade
+    de KMS key própria. RDS e Secrets Manager, que guardam o que
+    realmente importa proteger, já usam criptografia gerenciada.
+
+- id: AWS-0136
+  statement: >-
+    Mesmo caso do AWS-0132, para o tópico SNS de alarmes — já usa a
+    chave gerenciada `alias/aws/sns` (criptografado, só não é uma CMK
+    própria).
