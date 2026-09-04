@@ -1,11 +1,22 @@
 # Bootstrap do estado remoto do Terraform (AWS)
 
+> **✅ Executado em 04/09/2026.** Bucket, provider OIDC e `terraform init`
+> de teste todos confirmados — ver
+> [PLANO_DEVSECOPS_IAC.md § Fase 4](../docs/PLANO_DEVSECOPS_IAC.md#fase-4--bootstrap-do-estado-remoto-do-terraform--entregue-04092026)
+> para o resultado. Este arquivo fica como referência para quem precisar
+> refazer ou entender o processo — **não rodar de novo** (ver "O que NÃO
+> fazer" abaixo).
+
 Passo único, manual, rodado pelo **owner** — decisão D3b em
 [docs/PLANO_DEVSECOPS_IAC.md § 3](../docs/PLANO_DEVSECOPS_IAC.md#3-decisões-do-owner).
 Esta sessão de IA nunca segurou nem seguraria uma credencial AWS: os
 comandos abaixo são para você copiar, colar e rodar com o acesso que já tem
 na conta. A partir da Fase 5/6 do plano, tudo mais autentica via OIDC — sem
 chave estática nenhuma.
+
+Rodado com um IAM user novo (`votecomdados-bootstrap`), não root — policy
+escopada só ao bucket de state e ao provider OIDC, criada especificamente
+para este passo.
 
 ## Por que este passo não é Terraform
 
@@ -82,16 +93,21 @@ credencial de longa duração que este plano existe para evitar.
 ```bash
 aws iam create-open-id-connect-provider \
   --url "https://token.actions.githubusercontent.com" \
-  --client-id-list "sts.amazonaws.com" \
-  --thumbprint-list "6938fd4d98bab03faadb97b34396831e3780aea1"
+  --client-id-list "sts.amazonaws.com"
 ```
 
-> O thumbprint acima é o do certificado raiz atual do GitHub Actions OIDC.
-> Confirmar contra a
-> [documentação oficial da AWS](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html)
-> antes de rodar — ele rotaciona ocasionalmente, e um valor desatualizado
-> falha silenciosamente só na hora em que o GitHub Actions tentar assumir
-> a role, não agora.
+> **Sem `--thumbprint-list`, de propósito.** Uma versão anterior deste
+> runbook fixava um thumbprint manual — exatamente o tipo de valor que
+> rotaciona e falha em silêncio até o primeiro `AssumeRoleWithWebIdentity`
+> de verdade, o que só apareceria rodando o GitHub Actions da Fase 6, tarde
+> demais para ser óbvio. Revisando a
+> [documentação oficial da AWS](https://docs.aws.amazon.com/cli/latest/reference/iam/create-open-id-connect-provider.html)
+> antes deste bootstrap: **o parâmetro é opcional desde que a AWS passou a
+> confiar na cadeia de CAs conhecidas** para validar o certificado TLS do
+> endpoint OIDC — o thumbprint manual só é usado como fallback se essa
+> verificação falhar. Sem o parâmetro, o próprio IAM busca e usa o
+> thumbprint correto da CA intermediária no momento da criação, o que
+> elimina esse risco por completo em vez de só documentar o cuidado.
 
 O `role` que este provider autoriza (com a condição
 `repo:felipebrunheroto/votecomdados:*`) é criado pelo módulo `iam` do

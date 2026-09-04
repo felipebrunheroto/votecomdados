@@ -226,14 +226,27 @@ workflow em si ainda não foi exercitado contra um PR real com CVE
 introduzida de propósito — fica para a primeira vez que o Trivy de imagem
 tiver algo relevante para sinalizar, mesmo raciocínio da Fase 2.
 
-### Fase 4 — Bootstrap do estado remoto do Terraform (passo manual único)
+### Fase 4 — Bootstrap do estado remoto do Terraform ✅ Entregue (04/09/2026)
 
 Problema clássico de ovo-e-galinha: Terraform não pode gerenciar o próprio
 backend de estado antes de esse backend existir. Este é o único pedaço do
 plano que **não** é 100% IaC, por definição — documentado como runbook, não
-escondido como se fosse automático. Por decisão D3b, é o **owner** quem roda
-estes comandos, com o acesso que já tem na conta — esta sessão não segura
-nenhuma credencial AWS, nem temporária.
+escondido como se fosse automático. Por decisão D3b, foi o **owner** quem
+rodou estes comandos, com um IAM user novo criado para isso
+(`votecomdados-bootstrap`, policy escopada só a S3 do bucket de state e ao
+provider OIDC — não root, não `AdministratorAccess`) — esta sessão nunca
+segurou nenhuma credencial AWS.
+
+**Achado real durante a execução:** o thumbprint que a AWS auto-preencheu
+(`ab9d0263244dd0326eb67015705a667e79cfe998`) é **diferente** do valor que
+este runbook fixava manualmente antes da revisão de 04/09
+(`6938fd4d98bab03faadb97b34396831e3780aea1`) — confirmação concreta de que
+remover o `--thumbprint-list` manual (documentado na referência da AWS CLI
+como opcional desde que a validação por cadeia de CA confiável existe) não
+era só uma limpeza cosmética: o valor antigo estava
+desatualizado e teria sido aceito pela API sem erro, só falhando depois, na
+primeira vez que o GitHub Actions tentasse assumir uma role de verdade
+(Fase 6).
 
 Bucket S3 (versionado, `BlockPublicAccess` total, criptografado), criado uma
 vez via CLI. Lock nativo do próprio backend S3 (`use_lockfile = true`,
@@ -252,8 +265,18 @@ confirmados:
 | Conta/organização e nome do repositório no GitHub | `felipebrunheroto/votecomdados` — condição `repo:felipebrunheroto/votecomdados:*` no trust policy do OIDC (módulo `iam`, Fase 5) | ✅ confirmado |
 | E-mail para os alarmes de billing | assinante do tópico SNS dos alarmes de 50/80/100% (módulo `observabilidade`, Fase 5) | ✅ confirmado — mesmo tratamento do account ID: só em `terraform.tfvars`/segredo do GitHub, não em markdown |
 
-**Como se prova:** `terraform init` aponta para o backend remoto sem erro; um
-segundo `terraform init` de outra máquina recupera o mesmo estado.
+**Como se prova:** executado, não só planejado. Bucket criado
+(`votecomdados-terraform-state-<account-id>`, `us-east-1`) com
+versionamento, criptografia AES256 e bloqueio de acesso público — os três
+confirmados via `get-bucket-versioning`/`get-bucket-encryption`/
+`get-public-access-block`, não só assumidos pelo silêncio dos comandos de
+criação. Provider OIDC criado e confirmado via
+`get-open-id-connect-provider`. `terraform init` contra um `main.tf`
+descartável (só o bloco `backend "s3"`, sem recursos — os módulos reais
+ainda são a Fase 5) terminou em "Terraform has been successfully
+initialized!", com `use_lockfile=true`. Verificação de recuperação a partir
+de uma segunda máquina fica adiada — sem necessidade prática ainda, com um
+único operador.
 
 ### Fase 5 — Módulos Terraform
 
