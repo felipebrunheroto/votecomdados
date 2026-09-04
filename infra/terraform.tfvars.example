@@ -1,0 +1,16 @@
+# Copie para terraform.tfvars (gitignored) e preencha. No CI (Fase 6),
+# estes valores vêm de variáveis/segredos do GitHub Actions via -var, não
+# deste arquivo.
+
+dominio              = "votecomdados.com.br"
+billing_alert_email  = "seu-email-aqui@example.com"
+github_repo          = "felipebrunheroto/votecomdados"
+
+# Gerado uma única vez (ex.: `openssl rand -base64 32`) e nunca trocado —
+# ver secrets.tf.
+cpf_hmac_pepper = "SUBSTITUA_ANTES_DE_RODAR"
+
+# Deixe o default (`latest`) só para uma primeira aplicação manual local.
+# O pipeline real (Fase 7) sempre passa o SHA do commit.
+# imagem_api_tag       = "latest"
+# imagem_ingestion_tag = "latest"
