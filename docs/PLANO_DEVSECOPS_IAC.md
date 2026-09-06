@@ -356,23 +356,45 @@ infraestrutura. Isso é trabalho da Fase 6 (pipeline) ou de uma primeira
 aplicação manual guiada, ainda não feita — declarado em aberto, não
 assumido como testado.
 
-### Fase 6 — Pipeline de plan/apply
+### Fase 6 — Pipeline de plan/apply ✅ Entregue (04/09/2026)
 
 `.github/workflows/terraform.yml`:
 
-- Em PR que altera `infra/**`: `terraform plan`, resultado comentado
-  automaticamente no PR (o revisor — o próprio owner — lê o diff antes de
-  aprovar).
-- Em merge para `main`: `terraform apply`, atrás de um ambiente do GitHub
-  (`production`) com o owner como *required reviewer* (decisão D4) — clique
-  manual de confirmação, não automático.
-- Credencial de deploy escopada por tag/prefixo do projeto — nunca
-  `AdministratorAccess`/`roles/owner`.
+- Em PR que altera `infra/**`: `terraform fmt -check`, `validate`, `plan`,
+  resultado comentado automaticamente no PR (atualiza o mesmo comentário a
+  cada push, não acumula um novo por commit) — o revisor (o próprio owner)
+  lê o diff antes de aprovar.
+- Em push para `main` que altera `infra/**`: `terraform apply`, atrás do
+  ambiente `production` — criado com o owner como *required reviewer* e
+  restrito a branches protegidas (só `main` qualifica, já que é a única
+  com branch protection — Fase 0) — clique manual de confirmação, não
+  automático (D4).
+- Credencial de deploy: a role OIDC de `infra/iam.tf`, com o desvio de
+  "escopada por tag/prefixo" já registrado na Fase 5 (`PowerUserAccess` +
+  IAM escopado, não ação-por-ação).
 
-**Como se prova:** um PR alterando `infra/**` mostra o `plan` como
-comentário; aprovar o ambiente `production` é o único jeito de o `apply`
-prosseguir — testado recusando a aprovação uma vez de propósito e
-confirmando que nada muda na conta.
+**Ovo-e-galinha real, não hipotético:** este workflow autentica via a
+mesma role OIDC que o Terraform da Fase 5 cria — que só existe depois do
+primeiro `apply` bem-sucedido. Até lá, `plan`/`apply` aqui falham por
+design, não por bug. `infra/PRIMEIRA_APLICACAO.md` é o runbook dessa
+aplicação inicial (o owner roda, com o IAM user de bootstrap
+temporariamente ampliado — mesma disciplina D3b da Fase 4: esta sessão
+nunca segura credencial AWS). Só depois dela existir os quatro
+vars/secrets do GitHub Actions (`AWS_ROLE_ARN`, `TF_STATE_BUCKET`,
+`CPF_HMAC_PEPPER`, `BILLING_ALERT_EMAIL`) fazem sentido — `DOMINIO` já
+está configurado, é público, sem essa dependência.
+
+**Deliberadamente não promovido a check obrigatório ainda:** branch
+protection continua só com `test`/`guards`/`build`/`newman` (Fase 1). Um
+check `plan` que falha por credencial ausente bloquearia todo PR até a
+primeira aplicação acontecer — entra na lista de required checks só
+depois de confirmado rodando de ponta a ponta (último passo de
+`infra/PRIMEIRA_APLICACAO.md`).
+
+**Como se prova:** `actionlint` limpo antes de commitar. O resto —
+comentário automático no PR, gate de aprovação do ambiente `production`
+de fato bloqueando o `apply` — só é verificável depois da primeira
+aplicação existir; fica registrado como pendente, não como testado.
 
 ### Fase 7 — Deploy da aplicação
 

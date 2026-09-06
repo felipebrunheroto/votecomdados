@@ -1,0 +1,162 @@
+name: Terraform
+
+# Fase 6 do plano DevSecOps/IaC (docs/PLANO_DEVSECOPS_IAC.md). Autentica
+# via OIDC (sem chave estática — o provider e a role vêm da Fase 4/5), não
+# roda `apply` sem o clique manual do ambiente `production` (D4).
+#
+# PRÉ-REQUISITO PARA ESTE WORKFLOW FUNCIONAR: os módulos da Fase 5 ainda
+# não foram aplicados contra a conta real (nenhuma sessão de IA jamais
+# segurou credencial AWS — D3b). Até a primeira aplicação manual existir,
+# `plan`/`apply` aqui falham por falta de estado remoto com a role OIDC já
+# criada — é esperado, não bug deste workflow. Variáveis/segredos do
+# GitHub Actions que precisam existir antes de rodar de verdade:
+#
+#   vars.AWS_ROLE_ARN       — output `github_actions_deploy_role_arn` do
+#                              Terraform, só existe depois do primeiro apply
+#   vars.TF_STATE_BUCKET    — nome do bucket criado na Fase 4 (infra/BOOTSTRAP.md)
+#   vars.DOMINIO            — "votecomdados.com.br" (público, sem risco)
+#   secrets.CPF_HMAC_PEPPER — gerado uma única vez (ex.: openssl rand -base64 32),
+#                              nunca trocado depois (ver infra/secrets.tf)
+#   secrets.BILLING_ALERT_EMAIL
+
+on:
+  pull_request:
+    paths: ["infra/**"]
+  push:
+    branches: [main]
+    paths: ["infra/**"]
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false # nunca cancelar um apply no meio
+
+permissions:
+  id-token: write # obrigatório para o OIDC (aws-actions/configure-aws-credentials)
+  contents: read
+
+jobs:
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write # para comentar o plan no PR
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.12.2"
+          terraform_wrapper: true # necessário para o wrapper capturar stdout e comentar no PR
+
+      - name: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=us-east-1" \
+            -backend-config="key=votecomdados/terraform.tfstate" \
+            -backend-config="use_lockfile=true"
+
+      - run: terraform fmt -check -recursive
+
+      - run: terraform validate
+
+      - name: terraform plan
+        id: plan
+        run: |
+          terraform plan -no-color -input=false \
+            -var="dominio=${{ vars.DOMINIO }}" \
+            -var="billing_alert_email=${{ secrets.BILLING_ALERT_EMAIL }}" \
+            -var="cpf_hmac_pepper=${{ secrets.CPF_HMAC_PEPPER }}"
+        continue-on-error: true
+
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const output = `#### \`terraform plan\`: \`${{ steps.plan.outcome }}\`
+
+            <details><summary>Mostrar o plan completo</summary>
+
+            \`\`\`
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+
+            </details>
+
+            *Acionado por @${{ github.actor }}, commit \`${{ github.sha }}\`*`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existente = comments.find(c => c.body.startsWith("#### `terraform plan`"));
+
+            if (existente) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existente.id,
+                body: output,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: output,
+              });
+            }
+
+      - if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  apply:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production # D4 — aprovação manual obrigatória antes deste job rodar
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.12.2"
+
+      - name: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=us-east-1" \
+            -backend-config="key=votecomdados/terraform.tfstate" \
+            -backend-config="use_lockfile=true"
+
+      # Roda plan de novo, não reaproveita o arquivo de plan do PR que
+      # originou este merge — troca de simplicidade por uma janela pequena
+      # de drift entre revisão e aplicação, aceitável na escala de um único
+      # operador que aprova o ambiente `production` momentos antes deste
+      # passo rodar. Projetos com mais gente/mais tráfego de infra devem
+      # reconsiderar isso (salvar o plano como artefato e aplicar o mesmo
+      # arquivo, não um novo).
+      - name: terraform apply
+        run: |
+          terraform apply -auto-approve -input=false \
+            -var="dominio=${{ vars.DOMINIO }}" \
+            -var="billing_alert_email=${{ secrets.BILLING_ALERT_EMAIL }}" \
+            -var="cpf_hmac_pepper=${{ secrets.CPF_HMAC_PEPPER }}"
