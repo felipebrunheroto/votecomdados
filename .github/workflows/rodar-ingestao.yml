@@ -1,0 +1,95 @@
+name: Rodar ingestão
+
+# Dispara um job de ingestão sob demanda, via ECS RunTask.
+#
+# Existe por dois motivos:
+#
+# 1. A carga inicial (`coorte` e depois `backfill`) não é automática — o
+#    EventBridge Scheduler só dispara o `incremental` diário. Sem isto, o
+#    primeiro carregamento exigiria reampliar as permissões do IAM user de
+#    bootstrap, desfazendo o passo 7 de infra/PRIMEIRA_APLICACAO.md.
+# 2. `backfill` é uma necessidade recorrente, não só inicial: quando o
+#    `coorte` admite alguém novo (registro deferido em recurso,
+#    substituição de chapa), é preciso rodar backfill para aquela pessoa
+#    — ver docs/BACKEND.md § "Tipos de job".
+#
+# ORDEM IMPORTA (docs/BACKEND.md § "Ordem de ingestão"): votos e autoria
+# referenciam `politico` por FK, então o cadastro vem primeiro. Na carga
+# inicial: `coorte`, esperar terminar, depois `backfill`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Job de ingestão"
+        type: choice
+        required: true
+        options: [COORTE, BACKFILL, INCREMENTAL]
+      fonte:
+        description: "Fonte (opcional; só para BACKFILL — CAMARA, SENADO, ALESP, TSE)"
+        type: string
+        required: false
+      ano:
+        description: "Ano (opcional; só para BACKFILL)"
+        type: string
+        required: false
+
+concurrency:
+  group: ingestao # o worker tem exclusão mútua própria no banco, mas evitar
+  cancel-in-progress: false # disparos concorrentes economiza tasks que morreriam sozinhas
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  disparar:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: monta o comando e dispara a task
+        run: |
+          set -euo pipefail
+
+          # Descobre rede e SG pelas tags, em vez de exigir mais variáveis
+          # do GitHub Actions para dados que já estão etiquetados na AWS.
+          SUBNETS=$(aws ec2 describe-subnets \
+            --filters "Name=tag:Name,Values=votecomdados-publica-*" \
+            --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=tag:Name,Values=votecomdados-ecs-ingestion" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+
+          COMANDO="[\"--job=${{ inputs.job }}\""
+          if [ -n "${{ inputs.fonte }}" ]; then COMANDO="$COMANDO,\"--fonte=${{ inputs.fonte }}\""; fi
+          if [ -n "${{ inputs.ano }}" ]; then COMANDO="$COMANDO,\"--ano=${{ inputs.ano }}\""; fi
+          COMANDO="$COMANDO]"
+
+          echo "Disparando: $COMANDO"
+          echo "Subnets: $SUBNETS | SG: $SG"
+
+          ARN=$(aws ecs run-task \
+            --cluster votecomdados \
+            --task-definition votecomdados-ingestion \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=ENABLED}" \
+            --overrides "{\"containerOverrides\":[{\"name\":\"ingestion\",\"command\":$COMANDO}]}" \
+            --query 'tasks[0].taskArn' --output text)
+
+          echo "Task: $ARN"
+
+          # Fire-and-forget de propósito: o backfill histórico leva ~25h
+          # (CUSTOS_INFRA_AWS.md), muito além do limite de 6h de um job do
+          # GitHub Actions. Acompanhar é pelo log, não por este workflow.
+          {
+            echo "### Ingestão \`${{ inputs.job }}\` disparada"
+            echo ""
+            echo "Task: \`$ARN\`"
+            echo ""
+            echo "Acompanhar em CloudWatch Logs: \`/ecs/votecomdados-ingestion\`"
+          } >> "$GITHUB_STEP_SUMMARY"
