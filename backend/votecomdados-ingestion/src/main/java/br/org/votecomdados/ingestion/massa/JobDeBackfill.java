@@ -4,6 +4,7 @@ import br.org.votecomdados.core.dominio.Enums.CasaLegislativa;
 import br.org.votecomdados.ingestion.derivacao.DerivadorDeAusencia;
 import br.org.votecomdados.ingestion.download.ArquivosDaCamara;
 import br.org.votecomdados.ingestion.download.BaixadorDeArquivos;
+import br.org.votecomdados.ingestion.download.CadastroDaCamara;
 import br.org.votecomdados.ingestion.download.JobIncremental.EnderecosDoAno;
 import br.org.votecomdados.ingestion.execucao.Execucao;
 import br.org.votecomdados.ingestion.publicacao.FinalizadorDeIngestao;
@@ -61,13 +62,15 @@ public class JobDeBackfill {
     public static final int PRIMEIRO_ANO_COM_VOTO_NOMINAL = 2001;
 
     private final BaixadorDeArquivos baixador;
+    private final CadastroDaCamara cadastro;
     private final JobDeBackfillCamara backfill;
     private final DerivadorDeAusencia derivador;
     private final FinalizadorDeIngestao finalizador;
 
-    JobDeBackfill(BaixadorDeArquivos baixador, JobDeBackfillCamara backfill,
+    JobDeBackfill(BaixadorDeArquivos baixador, CadastroDaCamara cadastro, JobDeBackfillCamara backfill,
                  DerivadorDeAusencia derivador, FinalizadorDeIngestao finalizador) {
         this.baixador = baixador;
+        this.cadastro = cadastro;
         this.backfill = backfill;
         this.derivador = derivador;
         this.finalizador = finalizador;
@@ -94,6 +97,17 @@ public class JobDeBackfill {
         Instant watermark = execucao.watermarkAnterior();
         int materias = 0, votacoes = 0, votos = 0;
         var anosProcessados = new ArrayList<Integer>();
+
+        // Uma vez, antes do primeiro ano: o cadastro da Camara e o arquivo
+        // completo de todas as legislaturas, nao tem recorte por ano. E precisa
+        // vir antes de qualquer materia -- o INSERT de proposicao so aceita
+        // materia cujo autor ja esteja resolvido, entao um backfill sem esta
+        // etapa carrega votacao e grava zero materia, sem erro nenhum.
+        //
+        // Sem condicional: o historico nunca foi lido, nao ha watermark a
+        // perguntar -- a mesma razao de baixarAnoSemCondicional.
+        cadastro.atualizar(execucao, trabalho, null,
+                           enderecosPorAno.apply(anoInicial).deputados());
 
         Map<String, Long> tamanhosDoAnoAnterior = null;
 

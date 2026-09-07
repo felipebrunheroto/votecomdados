@@ -44,13 +44,16 @@ public class JobIncremental {
     private final JobDeBackfillCamara backfill;
     private final DerivadorDeAusencia derivador;
     private final FinalizadorDeIngestao finalizador;
+    private final CadastroDaCamara cadastro;
 
     JobIncremental(BaixadorDeArquivos baixador, JobDeBackfillCamara backfill,
-                   DerivadorDeAusencia derivador, FinalizadorDeIngestao finalizador) {
+                   DerivadorDeAusencia derivador, FinalizadorDeIngestao finalizador,
+                   CadastroDaCamara cadastro) {
         this.baixador = baixador;
         this.backfill = backfill;
         this.derivador = derivador;
         this.finalizador = finalizador;
+        this.cadastro = cadastro;
     }
 
     /**
@@ -73,7 +76,17 @@ public class JobIncremental {
             "votacoes.csv", base.votacoes(),
             "votos.csv", base.votos()));
 
-        if (materias.vazio() && votacoes.vazio()) {
+        // ANTES de matéria e voto, sempre. É o cadastro que transforma "id
+        // 204554 da Câmara" nesta pessoa, e o INSERT de proposicao só aceita
+        // matéria cujo autor já esteja resolvido. Sem esta etapa a carga
+        // inteira vira zero -- foi exatamente o que aconteceu em 07/09/2026,
+        // com 61.534 proposições lidas e nenhuma gravada.
+        //
+        // Condicional como o resto: quando o cadastro não mudou, a resposta
+        // tem zero byte e o vínculo já resolvido segue valendo.
+        boolean cadastroMudou = cadastro.atualizar(execucao, trabalho, desde, base.deputados());
+
+        if (materias.vazio() && votacoes.vazio() && !cadastroMudou) {
             log.info("nada mudou na Camara desde {}: encerrando sem trabalho", desde);
             // O watermark fica onde estava: nada foi processado, e mover o
             // marcador sobre uma janela vazia é como uma execução falha que
@@ -175,18 +188,25 @@ public class JobIncremental {
     }
 
     /** Endereços dos cinco arquivos de um ano. */
+    /**
+     * @param deputados o cadastro NÃO tem recorte por ano — a Câmara publica um
+     *        arquivo só, com todas as legislaturas. Ele mora aqui mesmo assim
+     *        porque é o que permite ao teste apontar o cadastro para um
+     *        servidor local junto com o resto do ano, em vez de exigir um
+     *        parâmetro à parte em cada assinatura.
+     */
     public record EnderecosDoAno(URI proposicoes, URI temas, URI autores,
-                                 URI votacoes, URI votos) {
+                                 URI votacoes, URI votos, URI deputados) {
 
         public static EnderecosDoAno daCamara(int ano) {
             return new EnderecosDoAno(
                 ArquivosDaCamara.proposicoes(ano), ArquivosDaCamara.temas(ano),
                 ArquivosDaCamara.autores(ano), ArquivosDaCamara.votacoes(ano),
-                ArquivosDaCamara.votos(ano));
+                ArquivosDaCamara.votos(ano), ArquivosDaCamara.deputados());
         }
 
         public List<URI> todos() {
-            return List.of(proposicoes, temas, autores, votacoes, votos);
+            return List.of(proposicoes, temas, autores, votacoes, votos, deputados);
         }
     }
 
