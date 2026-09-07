@@ -28,6 +28,23 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <testcontainers.version>2.0.5</testcontainers.version>
     <awssdk.version>2.46.7</awssdk.version>
+
+    <!--
+      Sobrescreve o Tomcat que o Spring Boot 4.1.1 traz (11.0.24), que tem
+      três CVEs CRITICAL com correção publicada — todas de bypass de
+      autenticação/autorização, achadas pelo `trivy image` do CI em
+      07/09/2026:
+
+        CVE-2026-65182  bypass de restrição de segurança
+        CVE-2026-65905  bypass de autenticação por replay no DIGEST
+        CVE-2026-68525  acesso não autorizado via bypass do FORM
+
+      Override pontual em vez de subir o Spring Boot inteiro: é a mudança
+      menor que resolve, e a API é pública e anônima — a superfície que
+      essas CVEs atacam é exatamente a dela. Remover quando o Spring Boot
+      passar a trazer 11.0.25+ por conta própria.
+    -->
+    <tomcat.version>11.0.25</tomcat.version>
   </properties>
 
   <dependencyManagement>
