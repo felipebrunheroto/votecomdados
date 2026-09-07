@@ -173,6 +173,16 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
                         + "ja carrega tudo) e o Senado reprocessa o ano inteiro a cada "
                         + "ciclo (idem) -- nenhum dos dois precisa de backfill por ano");
                 }
+                // --ano nao recorta o backfill, e ser ignorado em silencio ja
+                // custou uma execucao (07/09/2026): um pedido de "so 2024"
+                // virou o backfill inteiro de 2001 a 2026, e so deu para
+                // perceber pelo log, depois de falhar. Um argumento que o job
+                // nao entende e erro do operador, nao ruido a descartar.
+                if (args.getOptionValues("ano") != null) {
+                    throw new IllegalArgumentException(
+                        "o backfill recorta por --desde e --ate, nao por --ano; "
+                        + "para carregar um ano so, use --desde=AAAA --ate=AAAA");
+                }
                 // --desde: 2001 e o primeiro ano com voto nominal publicado. Um
                 // backfill de 25 anos que morre no meio nao recomeca do zero --
                 // o operador retoma passando o ano onde parou.

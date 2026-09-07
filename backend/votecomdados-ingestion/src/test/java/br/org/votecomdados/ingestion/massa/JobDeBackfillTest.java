@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -199,6 +200,56 @@ class JobDeBackfillTest {
         assertThat(ArquivosDaCamara.votacoes(2010).toString())
             .isEqualTo("https://dadosabertos.camara.leg.br/arquivos/votacoes/csv/votacoes-2010.csv");
         assertThat(EnderecosDoAno.daCamara(2010).todos()).hasSize(5);
+    }
+
+    /**
+     * O episódio de 07/09/2026: o portal serviu para 2004 o corpo de 2003, com
+     * {@code Last-Modified} diferente e tamanho idêntico ao byte. Carregar
+     * aquilo teria gravado matéria de 2003 rotulada como 2004.
+     */
+    @Test
+    void dois_arquivos_grandes_identicos_ao_ano_anterior_falham() {
+        var anterior = Map.of("proposicoes", 26_469_441L, "temas", 983_671L,
+                              "autores", 56_768_490L, "votacoes", 4_889_165L,
+                              "votos", 4_055_285L);
+        var atual = Map.of("proposicoes", 26_469_441L, "temas", 983_671L,
+                           "autores", 56_768_490L, "votacoes", 4_889_165L,
+                           "votos", 8_164_589L);
+
+        assertThatThrownBy(() -> JobDeBackfill.conferirQueNaoRepetiuOAnoAnterior(2004, anterior, atual))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("2004")
+            .hasMessageContaining("2003")
+            .hasMessageContaining("proposicoes");
+    }
+
+    /** Um só ainda pode ser coincidência; a regra exige dois. */
+    @Test
+    void um_arquivo_grande_repetido_sozinho_nao_barra_o_ano() {
+        var anterior = Map.of("proposicoes", 26_469_441L, "autores", 10_000_000L);
+        var atual = Map.of("proposicoes", 26_469_441L, "autores", 12_345_678L);
+
+        JobDeBackfill.conferirQueNaoRepetiuOAnoAnterior(2004, anterior, atual);
+    }
+
+    /**
+     * Por que a suíte inteira não quebra: os goldens são amostras de poucos KB
+     * e os dois anos servem o mesmo arquivo. Abaixo de 1 MiB, tamanho igual
+     * entre anos é plausível — barrar ali seria falso positivo.
+     */
+    @Test
+    void arquivos_pequenos_identicos_sao_plausiveis_e_nao_barram() {
+        var pequenos = Map.of("proposicoes", 2_889L, "temas", 573L,
+                              "autores", 1_481L, "votacoes", 1_169L);
+
+        JobDeBackfill.conferirQueNaoRepetiuOAnoAnterior(2025, pequenos, pequenos);
+    }
+
+    /** O primeiro ano do intervalo não tem com o que comparar. */
+    @Test
+    void o_primeiro_ano_nao_tem_anterior_e_passa() {
+        JobDeBackfill.conferirQueNaoRepetiuOAnoAnterior(
+            2001, null, Map.of("proposicoes", 26_469_441L, "autores", 56_768_490L));
     }
 
     // ---------------------------------------------------------------- auxiliares

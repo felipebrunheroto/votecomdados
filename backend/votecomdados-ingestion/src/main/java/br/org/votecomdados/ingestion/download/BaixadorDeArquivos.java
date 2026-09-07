@@ -76,6 +76,9 @@ public class BaixadorDeArquivos {
                 return Optional.empty();
             }
             if (resposta.statusCode() != 200) {
+                // O corpo do erro ja foi escrito em disco por ofFile: uma
+                // pagina de 404 com nome de CSV.
+                apagarParcial(destino);
                 throw new IllegalStateException(
                     "fonte respondeu " + resposta.statusCode() + " para " + origem);
             }
@@ -91,6 +94,13 @@ public class BaixadorDeArquivos {
             return Optional.of(new ArquivoBaixado(destino, modificadoEm, bytes));
 
         } catch (IOException e) {
+            // Corpo curto o HttpClient ja rejeita sozinho -- mas o que chegou
+            // antes da falha fica em disco, com o nome definitivo. A etapa
+            // seguinte carregaria esse pedaco como se fosse o arquivo inteiro,
+            // e um CSV cortado passa no COPY sem reclamar: so com menos linhas.
+            // O defeito reapareceria muito depois, como dado faltando que
+            // ninguem sabe explicar.
+            apagarParcial(destino);
             throw new IllegalStateException("falha ao baixar " + origem, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -102,6 +112,18 @@ public class BaixadorDeArquivos {
         String caminho = origem.getPath();
         int barra = caminho.lastIndexOf('/');
         return barra < 0 ? caminho : caminho.substring(barra + 1);
+    }
+
+    /**
+     * Apagar é melhor esforço: se falhar, o erro que importa é o do download,
+     * e mascará-lo com um problema de disco só atrapalharia o diagnóstico.
+     */
+    private static void apagarParcial(Path destino) {
+        try {
+            Files.deleteIfExists(destino);
+        } catch (IOException falhaAoApagar) {
+            log.warn("nao consegui apagar o parcial {}", destino, falhaAoApagar);
+        }
     }
 
     /**

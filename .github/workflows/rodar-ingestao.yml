@@ -31,7 +31,15 @@ on:
         required: true
         options: [CAMARA, SENADO, ALESP, TSE]
       ano:
-        description: "Ano (opcional; usado por BACKFILL e pelo INCREMENTAL do Senado)"
+        description: "Ano — INCREMENTAL do Senado apenas. O BACKFILL RECUSA este campo; use desde/ate"
+        type: string
+        required: false
+      desde:
+        description: "BACKFILL: primeiro ano (padrao 2001, o primeiro com voto nominal)"
+        type: string
+        required: false
+      ate:
+        description: "BACKFILL: ultimo ano (padrao: ano corrente). Um ano so? desde=ate=AAAA"
         type: string
         required: false
       arquivo:
@@ -73,6 +81,8 @@ jobs:
           COMANDO="[\"--job=${{ inputs.job }}\""
           if [ -n "${{ inputs.fonte }}" ]; then COMANDO="$COMANDO,\"--fonte=${{ inputs.fonte }}\""; fi
           if [ -n "${{ inputs.ano }}" ]; then COMANDO="$COMANDO,\"--ano=${{ inputs.ano }}\""; fi
+          if [ -n "${{ inputs.desde }}" ]; then COMANDO="$COMANDO,\"--desde=${{ inputs.desde }}\""; fi
+          if [ -n "${{ inputs.ate }}" ]; then COMANDO="$COMANDO,\"--ate=${{ inputs.ate }}\""; fi
           if [ -n "${{ inputs.arquivo }}" ]; then COMANDO="$COMANDO,\"--arquivo=${{ inputs.arquivo }}\""; fi
           COMANDO="$COMANDO]"
 

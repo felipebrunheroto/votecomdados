@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.IntFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,9 +95,13 @@ public class JobDeBackfill {
         int materias = 0, votacoes = 0, votos = 0;
         var anosProcessados = new ArrayList<Integer>();
 
+        Map<String, Long> tamanhosDoAnoAnterior = null;
+
         for (int ano = anoInicial; ano <= anoFinal; ano++) {
             log.info("backfill camara: carregando o ano {}", ano);
             var arquivos = baixarAnoSemCondicional(trabalho, enderecosPorAno.apply(ano));
+            conferirQueNaoRepetiuOAnoAnterior(ano, tamanhosDoAnoAnterior, arquivos.tamanhos());
+            tamanhosDoAnoAnterior = arquivos.tamanhos();
 
             var p = backfill.carregarProposicoes(execucao, arquivos.proposicoes(),
                                                  arquivos.temas(), arquivos.autores());
@@ -140,7 +145,62 @@ public class JobDeBackfill {
             .max(Instant::compareTo).orElseThrow();
 
         return new ArquivosDoAno(proposicoes.caminho(), temas.caminho(), autores.caminho(),
-                                 votacoes.caminho(), votosBaixados.caminho(), maisRecente);
+                                 votacoes.caminho(), votosBaixados.caminho(), maisRecente,
+                                 Map.of("proposicoes", proposicoes.bytes(),
+                                        "temas", temas.bytes(),
+                                        "autores", autores.bytes(),
+                                        "votacoes", votacoes.bytes(),
+                                        "votos", votosBaixados.bytes()));
+    }
+
+    /**
+     * Abaixo disto dois anos podem ter o mesmo tamanho por coincidência — um
+     * CSV pequeno de um ano fraco em produção legislativa, por exemplo.
+     */
+    private static final long TAMANHO_MINIMO_PARA_DESCONFIAR = 1L << 20; // 1 MiB
+
+    /**
+     * O portal da Câmara já serviu o corpo de um ano sob a URL de outro.
+     *
+     * <p>Em 07/09/2026 o backfill morreu em 2004 com "unquoted carriage return
+     * found in data", e o que o log mostrava era mais estranho que o erro:
+     * {@code proposicoes-2003.csv} e {@code proposicoes-2004.csv} chegaram com
+     * exatamente 26.469.441 bytes cada, {@code proposicoesAutores} com
+     * 56.768.490 cada, {@code votacoes} com 4.889.165 cada — com
+     * {@code Last-Modified} diferentes. Baixados de novo horas depois, os
+     * tamanhos eram outros e o COPY passava. Foi o portal entregando conteúdo
+     * errado durante uma regeneração, não dado corrompido na origem.
+     *
+     * <p>Naquele dia demos sorte: o corpo trocado quebrou o parser. Se tivesse
+     * carregado, teríamos gravado matéria de 2003 rotulada como 2004 — dado
+     * errado, em silêncio, num site cujo propósito é ser confiável. Por isso a
+     * checagem falha em vez de avisar.
+     *
+     * <p>Dois arquivos grandes coincidindo ao byte entre anos consecutivos é o
+     * suficiente: um só ainda pode ser acaso, dois não são.
+     */
+    // Visível ao pacote de propósito: os goldens da suíte são amostras de
+    // poucos KB, abaixo do limite, então nenhum teste de ponta a ponta
+    // exercitaria esta regra sem carregar megabytes de fixture só para isso.
+    static void conferirQueNaoRepetiuOAnoAnterior(
+            int ano, Map<String, Long> anterior, Map<String, Long> atual) {
+        if (anterior == null) return;
+
+        var repetidos = atual.entrySet().stream()
+            .filter(e -> e.getValue() >= TAMANHO_MINIMO_PARA_DESCONFIAR)
+            .filter(e -> e.getValue().equals(anterior.get(e.getKey())))
+            .map(Map.Entry::getKey)
+            .sorted()
+            .toList();
+
+        if (repetidos.size() >= 2) {
+            throw new IllegalStateException(
+                "a fonte entregou para " + ano + " arquivo(s) identicos aos de "
+                + (ano - 1) + " " + repetidos + "; provavelmente o portal servia "
+                + "conteudo de outro ano durante uma regeneracao. Carregar isso "
+                + "gravaria dado de " + (ano - 1) + " rotulado como " + ano
+                + ". Repita o backfill a partir de --desde=" + ano + " mais tarde");
+        }
     }
 
     private BaixadorDeArquivos.ArquivoBaixado baixar(Path trabalho, String nome,
@@ -151,7 +211,8 @@ public class JobDeBackfill {
     }
 
     private record ArquivosDoAno(Path proposicoes, Path temas, Path autores,
-                                 Path votacoes, Path votos, Instant maisRecente) {}
+                                 Path votacoes, Path votos, Instant maisRecente,
+                                 Map<String, Long> tamanhos) {}
 
     /**
      * @param anosProcessados na ordem em que entraram — útil para conferir
