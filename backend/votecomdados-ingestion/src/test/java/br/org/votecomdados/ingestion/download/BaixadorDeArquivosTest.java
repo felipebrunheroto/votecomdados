@@ -67,6 +67,17 @@ class BaixadorDeArquivosTest {
             troca.sendResponseHeaders(500, -1);
             troca.close();
         });
+        // Anuncia mais do que entrega. O HttpClient rejeita o corpo curto
+        // sozinho; o que se prova aqui e que o pedaco ja escrito nao fica para
+        // tras com o nome definitivo -- um CSV cortado passa no COPY sem
+        // reclamar, so com menos linhas.
+        servidor.createContext("/truncado.csv", troca -> {
+            byte[] parcial = "\"id\";\"valor\"\n".getBytes(StandardCharsets.UTF_8);
+            troca.sendResponseHeaders(200, parcial.length + 500L);
+            try (var saida = troca.getResponseBody()) {
+                saida.write(parcial);
+            }
+        });
         servidor.start();
         origem = URI.create("http://127.0.0.1:" + servidor.getAddress().getPort()
                             + "/arquivo.csv");
@@ -135,6 +146,19 @@ class BaixadorDeArquivosTest {
     }
 
     /** Erro tratado como "nada mudou" avançaria o watermark sobre uma janela vazia. */
+    @Test
+    void corpo_truncado_nao_deixa_arquivo_parcial_para_tras(@TempDir Path dir) {
+        URI truncado = URI.create("http://127.0.0.1:" + servidor.getAddress().getPort()
+                                  + "/truncado.csv");
+
+        assertThatThrownBy(() -> baixador.baixarSeMudou(truncado, dir.resolve("t.csv"), null))
+            .isInstanceOf(IllegalStateException.class);
+
+        assertThat(dir.resolve("t.csv"))
+            .as("arquivo parcial nao pode ficar para tras: a proxima etapa o carregaria")
+            .doesNotExist();
+    }
+
     @Test
     void o_endereco_dos_arquivos_da_camara_segue_o_padrao_do_portal() {
         assertThat(ArquivosDaCamara.votacoes(2026).toString())
