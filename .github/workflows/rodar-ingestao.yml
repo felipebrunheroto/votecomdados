@@ -17,20 +17,30 @@ name: Rodar ingestão
 # referenciam `politico` por FK, então o cadastro vem primeiro. Na carga
 # inicial: `coorte`, esperar terminar, depois `backfill`.
 
+# LIMITAÇÃO CONHECIDA — o COORTE não roda por aqui hoje. Ele exige
+# `--arquivo` apontando para um `consulta_cand_*.zip` LEGÍVEL NO DISCO
+# (SeletorDeJob.caminhoObrigatorio), baixado manualmente pelo owner porque
+# o TSE bloqueia parte das máquinas (docs/PLANO_IMPLEMENTACAO.md, W3). O
+# módulo de ingestão não tem cliente S3 nenhum — zero dependências do SDK
+# da AWS no pom — então não há como entregar esse arquivo dentro de um
+# container Fargate sem mudança de aplicação. Ver o PR que introduziu este
+# comentário para as opções discutidas.
+
 on:
   workflow_dispatch:
     inputs:
       job:
-        description: "Job de ingestão"
+        description: "Job de ingestão (COORTE ainda não funciona aqui — ver comentário no topo do arquivo)"
         type: choice
         required: true
-        options: [COORTE, BACKFILL, INCREMENTAL]
+        options: [BACKFILL, INCREMENTAL, COORTE]
       fonte:
-        description: "Fonte (opcional; só para BACKFILL — CAMARA, SENADO, ALESP, TSE)"
-        type: string
-        required: false
+        description: "Fonte — SEMPRE obrigatória (CAMARA, SENADO, ALESP, TSE)"
+        type: choice
+        required: true
+        options: [CAMARA, SENADO, ALESP, TSE]
       ano:
-        description: "Ano (opcional; só para BACKFILL)"
+        description: "Ano (opcional; usado por BACKFILL e pelo INCREMENTAL do Senado)"
         type: string
         required: false
 
