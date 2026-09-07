@@ -10,11 +10,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -97,6 +99,55 @@ class ProposicoesCamaraTest {
         var temas = jdbc.sql("SELECT DISTINCT tema FROM proposicao_tema ORDER BY 1")
             .query(String.class).list();
         assertThat(temas).isNotEmpty();
+    }
+
+    /**
+     * A fonte repete par (proposição, autor).
+     *
+     * <p>Em {@code proposicoesAutores-2024.csv} são 18 pares repetidos em
+     * 97.122 linhas — a proposição 2440792 lista "Hildo Rocha" duas vezes. Sem
+     * deduplicar na origem, o {@code ON CONFLICT DO UPDATE} tenta tocar a mesma
+     * linha duas vezes no mesmo comando e o Postgres recusa a <b>carga
+     * inteira</b> com "cannot affect row a second time" — foi o que derrubou o
+     * backfill em 07/09/2026, depois de o cadastro já ter resolvido 958
+     * deputados.
+     *
+     * <p>A cópia aqui vem SEM id de deputado de propósito: prova que sobrevive
+     * a linha que resolve pessoa, e não a última lida. Perder o vínculo seria
+     * perder a ligação autor-político, que é o produto.
+     */
+    @Test
+    void autoria_repetida_na_fonte_nao_derruba_a_carga(@TempDir Path dir) throws IOException {
+        var linhas = Files.readAllLines(AUTORES, StandardCharsets.UTF_8);
+        int comDeputado = -1;
+        for (int i = 1; i < linhas.size(); i++) {
+            if (!linhas.get(i).split(";")[2].replace("\"", "").isBlank()) {
+                comDeputado = i;
+                break;
+            }
+        }
+        assertThat(comDeputado).as("a amostra precisa ter autoria de deputado").isPositive();
+
+        var campos = linhas.get(comDeputado).split(";");
+        campos[2] = "\"\"";
+        var comRepetida = new ArrayList<>(linhas);
+        comRepetida.add(String.join(";", campos));
+
+        Path autores = dir.resolve("autores.csv");
+        Files.write(autores, comRepetida, StandardCharsets.UTF_8);
+
+        deputadosDosArquivosNaCoorte();
+        job.carregarProposicoes(execucao, PROPOSICOES, TEMAS, autores);
+
+        String nome = campos[6].replace("\"", "");
+        var comPerfil = jdbc.sql("""
+                SELECT count(*) FROM proposicao_autor
+                 WHERE autor_nome = :nome AND politico_id IS NOT NULL
+                """).param("nome", nome).query(Long.class).single();
+
+        assertThat(comPerfil)
+            .as("a linha que resolve pessoa e a que tem de sobreviver")
+            .isPositive();
     }
 
     /** O arquivo de temas não traz o id: só a URI. */
