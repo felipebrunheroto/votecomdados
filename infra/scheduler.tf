@@ -86,23 +86,69 @@ resource "aws_scheduler_schedule" "coorte_diaria" {
       }
       Overrides = {
         ContainerOverrides = [{
-          Name    = "ingestion"
-          Command = ["--job=COORTE"]
+          Name = "ingestion"
+          # O pacote do TSE é baixado À MÃO pelo owner (o TSE bloqueia parte
+          # das máquinas — PLANO_IMPLEMENTACAO.md, W3) e enviado ao bucket
+          # privado de entradas. O cron reprocessa esse mesmo arquivo todo
+          # dia: o upsert é idempotente, e o que ele de fato entrega
+          # diariamente é a PODA de quem saiu da coorte. Atualizar a lista
+          # com dados novos do TSE exige reenviar o arquivo — não há como
+          # automatizar esse download.
+          Command = [
+            "--job=COORTE",
+            "--fonte=TSE",
+            "--arquivo=s3://${aws_s3_bucket.ingestao.id}/entrada/consulta_cand_2026.zip",
+          ]
         }]
       }
     })
   }
 }
 
+# Um cron POR FONTE, e não um só: `--fonte` é obrigatório em todo job
+# (SeletorDeJob.run), e o `INCREMENTAL` trata cada fonte de um jeito
+# diferente — Alesp republica a série inteira num arquivo, o Senado não
+# publica Last-Modified e usa a maior dataSessao como watermark, a Câmara
+# usa If-Modified-Since. Não existe "incremental de todas as fontes" para
+# invocar de uma vez.
+#
+# Achado em 07/09/2026: o cron original não passava `--fonte` nenhuma, então
+# falharia toda madrugada com "argumentos invalidos" — e, mesmo corrigido
+# para uma fonte só, Senado e Alesp nunca seriam ingeridos.
+#
+# `--dados-abertos` fica só na ÚLTIMA da fila. O exportador recusa
+# sobrescrever o instantâneo do dia (ArmazenamentoDeObjetos.existeAlgoSob),
+# então passá-lo nas três faria as duas primeiras publicarem e a terceira
+# logar "falhou" — ruído que treina a gente a ignorar aviso. Na última, o
+# pacote sai com o dado das três fontes já ingerido.
+locals {
+  incrementais = {
+    camara = {
+      cron    = "cron(0 6 * * ? *)" # 06:00 UTC = 03:00 BRT
+      comando = ["--job=INCREMENTAL", "--fonte=CAMARA"]
+    }
+    senado = {
+      cron    = "cron(30 6 * * ? *)"
+      comando = ["--job=INCREMENTAL", "--fonte=SENADO"]
+    }
+    alesp = {
+      cron = "cron(0 7 * * ? *)"
+      comando = [
+        "--job=INCREMENTAL",
+        "--fonte=ALESP",
+        "--dados-abertos=s3://${aws_s3_bucket.frontend.id}/dados-abertos",
+      ]
+    }
+  }
+}
+
 resource "aws_scheduler_schedule" "ingestao_diaria" {
-  name       = "votecomdados-ingestao-diaria"
+  for_each = local.incrementais
+
+  name       = "votecomdados-ingestao-diaria-${each.key}"
   group_name = "default"
 
-  # Horário de menor tráfego provável de leitores brasileiros — não é
-  # requisito rígido, o cache de borda absorve o rebuild independente da
-  # hora (ver FRONTEND.md § 1 "Pipeline de rebuild"). Roda depois do
-  # `coorte` (05:00), que é seu pré-requisito.
-  schedule_expression = "cron(0 6 * * ? *)" # 06:00 UTC = 03:00 BRT
+  schedule_expression = each.value.cron
 
   flexible_time_window {
     mode = "OFF"
@@ -133,7 +179,7 @@ resource "aws_scheduler_schedule" "ingestao_diaria" {
       Overrides = {
         ContainerOverrides = [{
           Name    = "ingestion"
-          Command = ["--job=INCREMENTAL"]
+          Command = each.value.comando
         }]
       }
     })

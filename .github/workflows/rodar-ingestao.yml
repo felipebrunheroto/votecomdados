@@ -17,30 +17,25 @@ name: Rodar ingestão
 # referenciam `politico` por FK, então o cadastro vem primeiro. Na carga
 # inicial: `coorte`, esperar terminar, depois `backfill`.
 
-# LIMITAÇÃO CONHECIDA — o COORTE não roda por aqui hoje. Ele exige
-# `--arquivo` apontando para um `consulta_cand_*.zip` LEGÍVEL NO DISCO
-# (SeletorDeJob.caminhoObrigatorio), baixado manualmente pelo owner porque
-# o TSE bloqueia parte das máquinas (docs/PLANO_IMPLEMENTACAO.md, W3). O
-# módulo de ingestão não tem cliente S3 nenhum — zero dependências do SDK
-# da AWS no pom — então não há como entregar esse arquivo dentro de um
-# container Fargate sem mudança de aplicação. Ver o PR que introduziu este
-# comentário para as opções discutidas.
-
 on:
   workflow_dispatch:
     inputs:
       job:
-        description: "Job de ingestão (COORTE ainda não funciona aqui — ver comentário no topo do arquivo)"
+        description: "Job de ingestão"
         type: choice
         required: true
         options: [BACKFILL, INCREMENTAL, COORTE]
       fonte:
-        description: "Fonte — SEMPRE obrigatória (CAMARA, SENADO, ALESP, TSE)"
+        description: "Fonte — SEMPRE obrigatória, em todo job"
         type: choice
         required: true
         options: [CAMARA, SENADO, ALESP, TSE]
       ano:
         description: "Ano (opcional; usado por BACKFILL e pelo INCREMENTAL do Senado)"
+        type: string
+        required: false
+      arquivo:
+        description: "Obrigatório no COORTE — s3://bucket/entrada/consulta_cand_2026.zip"
         type: string
         required: false
 
@@ -78,6 +73,7 @@ jobs:
           COMANDO="[\"--job=${{ inputs.job }}\""
           if [ -n "${{ inputs.fonte }}" ]; then COMANDO="$COMANDO,\"--fonte=${{ inputs.fonte }}\""; fi
           if [ -n "${{ inputs.ano }}" ]; then COMANDO="$COMANDO,\"--ano=${{ inputs.ano }}\""; fi
+          if [ -n "${{ inputs.arquivo }}" ]; then COMANDO="$COMANDO,\"--arquivo=${{ inputs.arquivo }}\""; fi
           COMANDO="$COMANDO]"
 
           echo "Disparando: $COMANDO"

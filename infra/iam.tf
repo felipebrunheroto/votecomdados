@@ -55,6 +55,30 @@ data "aws_iam_policy_document" "task_ingestion_permissoes" {
     actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.frontend.arn}/dados-abertos/*"]
   }
+
+  # `existeAlgoSob` (ArmazenamentoDeObjetos) chama ListObjectsV2 para não
+  # sobrescrever um instantâneo já publicado, e ListObjectsV2 exige
+  # `s3:ListBucket` no BUCKET, não no objeto. Escopado por prefixo para não
+  # virar "pode listar o site inteiro".
+  statement {
+    sid       = "VerificarInstantaneoJaPublicado"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.frontend.arn]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["dados-abertos/*"]
+    }
+  }
+
+  # Leitura do pacote do TSE, no bucket privado de entradas. Só GetObject, e
+  # só sob `entrada/`: a ingestão consome esse arquivo, nunca escreve nele.
+  statement {
+    sid       = "LerEntradaDoTse"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.ingestao.arn}/entrada/*"]
+  }
 }
 
 resource "aws_iam_role_policy" "task_ingestion" {
