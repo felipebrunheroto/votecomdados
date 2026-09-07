@@ -77,13 +77,14 @@ class JobIncrementalTest {
         servirGolden("/autores.csv", "camara-proposicoesAutores-2026-amostra.csv");
         servirGolden("/votacoes.csv", "camara-votacoes-2026-amostra.csv");
         servirGolden("/votos.csv", "camara-votacoesVotos-2026-amostra.csv");
+        servirGolden("/deputados.csv", "camara-deputados-amostra.csv");
         servidor.start();
 
         String base = "http://127.0.0.1:" + servidor.getAddress().getPort();
         enderecos = new JobIncremental.EnderecosDoAno(
             URI.create(base + "/proposicoes.csv"), URI.create(base + "/temas.csv"),
             URI.create(base + "/autores.csv"), URI.create(base + "/votacoes.csv"),
-            URI.create(base + "/votos.csv"));
+            URI.create(base + "/votos.csv"), URI.create(base + "/deputados.csv"));
 
         execucao = controle.iniciar(Fonte.CAMARA, TipoJob.INCREMENTAL, "{}");
     }
@@ -95,6 +96,11 @@ class JobIncrementalTest {
         jdbc.sql("DELETE FROM politico").update();
         jdbc.sql("DELETE FROM votacao").update();
         jdbc.sql("DELETE FROM proposicao").update();
+        // O cadastro de parlamentares escreve nas duas tabelas de staging, e
+        // ambas referenciam a execucao por FK: apagar a execucao antes
+        // deixaria filho orfao.
+        jdbc.sql("DELETE FROM staging.registro_rejeitado").update();
+        jdbc.sql("DELETE FROM staging.payload_bruto").update();
         jdbc.sql("DELETE FROM ingestao_execucao").update();
     }
 

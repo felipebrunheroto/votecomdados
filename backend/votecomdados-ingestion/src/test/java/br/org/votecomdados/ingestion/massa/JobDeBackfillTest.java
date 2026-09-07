@@ -92,6 +92,7 @@ class JobDeBackfillTest {
             servirGolden("/" + ano + "/votacoes.csv", "camara-votacoes-2026-amostra.csv");
             servirGolden("/" + ano + "/votos.csv", "camara-votacoesVotos-2026-amostra.csv");
         }
+        servirGolden("/deputados.csv", "camara-deputados-amostra.csv");
         servidor.start();
         execucao = controle.iniciar(Fonte.CAMARA, TipoJob.BACKFILL, "{}");
     }
@@ -103,6 +104,11 @@ class JobDeBackfillTest {
         jdbc.sql("DELETE FROM politico").update();
         jdbc.sql("DELETE FROM votacao").update();
         jdbc.sql("DELETE FROM proposicao").update();
+        // O cadastro de parlamentares escreve nas duas tabelas de staging, e
+        // ambas referenciam a execucao por FK: apagar a execucao antes
+        // deixaria filho orfao.
+        jdbc.sql("DELETE FROM staging.registro_rejeitado").update();
+        jdbc.sql("DELETE FROM staging.payload_bruto").update();
         jdbc.sql("DELETE FROM ingestao_execucao").update();
     }
 
@@ -130,7 +136,7 @@ class JobDeBackfillTest {
 
         job.executar(execucao, ANO_1, ANO_2, dir, this::enderecosDoAno);
 
-        assertThat(requisicoes.get()).isEqualTo(10); // 5 arquivos x 2 anos
+        assertThat(requisicoes.get()).isEqualTo(11); // 5 arquivos x 2 anos + 1 cadastro
         assertThat(comIfModifiedSince)
             .as("backfill nunca pergunta 'mudou desde quando' -- o ano nunca foi lido")
             .isEmpty();
@@ -144,7 +150,7 @@ class JobDeBackfillTest {
         var r = job.executar(execucao, ANO_2, ANO_2, dir, this::enderecosDoAno);
 
         assertThat(r.anosProcessados()).containsExactly(ANO_2);
-        assertThat(requisicoes.get()).isEqualTo(5); // só o ano pedido
+        assertThat(requisicoes.get()).isEqualTo(6); // só o ano pedido + o cadastro
     }
 
     @Test
@@ -199,7 +205,45 @@ class JobDeBackfillTest {
     void os_enderecos_de_producao_seguem_o_padrao_do_portal() {
         assertThat(ArquivosDaCamara.votacoes(2010).toString())
             .isEqualTo("https://dadosabertos.camara.leg.br/arquivos/votacoes/csv/votacoes-2010.csv");
-        assertThat(EnderecosDoAno.daCamara(2010).todos()).hasSize(5);
+        assertThat(EnderecosDoAno.daCamara(2010).todos()).hasSize(6);
+    }
+
+    /**
+     * O teste que faltava — e cuja ausência deixou o defeito passar.
+     *
+     * <p>Os outros casos chamam {@code deputadosDaAmostraNaCoorte()}, que
+     * INSERE {@code identificador_externo} à mão. Isso fabricava a precondição
+     * em vez de exercitar o passo que a estabelece, e por isso a suíte ficava
+     * verde enquanto a produção gravava zero matéria: nenhum job da Câmara
+     * chamava o cadastro.
+     *
+     * <p>Aqui ninguém semeia vínculo. Só existem pessoas em {@code politico},
+     * como o COORTE as deixa; é o cadastro que tem de descobrir que o id 220593
+     * da Câmara é uma delas.
+     */
+    @Test
+    void o_cadastro_resolve_o_vinculo_que_ninguem_semeou(@TempDir Path dir) {
+        // Nome civil e nascimento exatamente como no cadastro da Câmara: é o
+        // par que a resolução usa antes de recorrer a similaridade de nome.
+        jdbc.sql("""
+            INSERT INTO politico (nome_civil, data_nascimento)
+            VALUES ('ABILIO JACQUES BRUNINI MOUMER', DATE '1984-01-31')
+            """).update();
+
+        assertThat(contarVinculosDaCamara())
+            .as("precondicao: ninguem semeou vinculo")
+            .isZero();
+
+        job.executar(execucao, ANO_1, ANO_1, dir, this::enderecosDoAno);
+
+        assertThat(contarVinculosDaCamara())
+            .as("o cadastro tem de ligar o id da Camara a pessoa da coorte")
+            .isPositive();
+    }
+
+    private long contarVinculosDaCamara() {
+        return jdbc.sql("SELECT count(*) FROM identificador_externo WHERE sistema = 'CAMARA'")
+                   .query(Long.class).single();
     }
 
     /**
@@ -259,7 +303,9 @@ class JobDeBackfillTest {
         return new EnderecosDoAno(
             URI.create(base + "/proposicoes.csv"), URI.create(base + "/temas.csv"),
             URI.create(base + "/autores.csv"), URI.create(base + "/votacoes.csv"),
-            URI.create(base + "/votos.csv"));
+            URI.create(base + "/votos.csv"),
+            // O cadastro nao tem recorte por ano: mesma URL para todo ano.
+            URI.create("http://127.0.0.1:" + servidor.getAddress().getPort() + "/deputados.csv"));
     }
 
     private void servirGolden(String caminho, String arquivo) {
