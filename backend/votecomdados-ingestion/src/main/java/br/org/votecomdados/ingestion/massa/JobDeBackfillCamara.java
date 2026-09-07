@@ -274,10 +274,18 @@ public class JobDeBackfillCamara {
                 // ou o Executivo — e também quando é deputado fora da coorte.
                 // Nos dois casos vira nome sem perfil: a lista de autoria fica
                 // completa, e só quem se apresenta ao eleitorado tem página.
+                //
+                // DISTINCT ON porque a fonte repete par (proposição, autor):
+                // em proposicoesAutores-2024.csv são 18 pares em 97.122 linhas
+                // -- a proposição 2440792 lista "Hildo Rocha" duas vezes. Sem
+                // deduplicar, o ON CONFLICT DO UPDATE tenta tocar a mesma
+                // linha duas vezes no mesmo comando, e o Postgres recusa a
+                // carga inteira com "cannot affect row a second time".
                 int autorias = st.executeUpdate("""
                     INSERT INTO proposicao_autor (proposicao_id, politico_id,
                                                   autor_nome, autor_principal)
-                    SELECT p.id, ie.politico_id, a."nomeAutor",
+                    SELECT DISTINCT ON (p.id, a."nomeAutor")
+                           p.id, ie.politico_id, a."nomeAutor",
                            coalesce(a."proponente" = '1', true)
                       FROM autor a
                       JOIN proposicao p ON p.casa = 'CAMARA'
@@ -286,6 +294,15 @@ public class JobDeBackfillCamara {
                              ON ie.sistema = 'CAMARA'
                             AND ie.identificador = nullif(a."idDeputadoAutor", '')
                      WHERE nullif(a."nomeAutor", '') IS NOT NULL
+                     ORDER BY p.id, a."nomeAutor",
+                              -- Entre linhas repetidas, fica a que resolve
+                              -- pessoa: perder o vinculo seria perder a
+                              -- ligacao autor-politico, que e o produto.
+                              (ie.politico_id IS NOT NULL) DESC,
+                              (a."proponente" = '1') DESC NULLS LAST,
+                              -- Desempate estavel, para a reexecucao gravar o
+                              -- mesmo de sempre em vez de alternar.
+                              nullif(a."ordemAssinatura", '')::int NULLS LAST
                     ON CONFLICT (proposicao_id, autor_nome) DO UPDATE SET
                         politico_id = EXCLUDED.politico_id,
                         autor_principal = EXCLUDED.autor_principal
