@@ -401,21 +401,56 @@ segurou credencial AWS). Os quatro vars/secrets (`AWS_ROLE_ARN`,
 `TF_STATE_BUCKET`, `CPF_HMAC_PEPPER`, `BILLING_ALERT_EMAIL`) estão
 configurados, além de `DOMINIO`.
 
-**Ainda não promovido a check obrigatório:** branch protection continua só
-com `test`/`guards`/`build`/`newman` (Fase 1). Agora que `plan` roda verde
-de ponta a ponta, promovê-lo é uma decisão em aberto — o argumento a favor
-é óbvio; o argumento contra é que uma indisponibilidade da AWS ou uma
-expiração de credencial passaria a bloquear PRs que não tocam infra
-nenhuma.
+**`plan` fica FORA dos checks obrigatórios — decisão fechada em
+07/09/2026.** Branch protection continua só com
+`test`/`guards`/`build`/`newman` (Fase 1). Três razões, em ordem de peso:
+
+1. **Impedimento técnico, não só preferência.** Este workflow filtra por
+   caminho no nível do *workflow* (`on: pull_request: paths:
+   ["infra/**"]`). Um workflow pulado por filtro de caminho **não reporta
+   status nenhum** — e um check obrigatório que nunca reporta trava o PR
+   em "Expected — waiting for status to be reported" indefinidamente
+   ([GitHub Docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks)).
+   Promover `plan` hoje tornaria **impossível mesclar qualquer PR que não
+   toque `infra/**`**, incluindo PRs só de documentação. Para fazer
+   direito seria preciso trocar o filtro de workflow por condicional de
+   *job* (job pulado por `if:` reporta "Success"), o que exige uma job
+   extra só para calcular caminhos alterados — ou rodar `plan` em todo PR.
+2. **O ganho marginal é pequeno com um operador só.** Quem mescla é a
+   mesma pessoa que lê o comentário do `plan`, publicado no próprio PR.
+3. **O gate real está depois.** Se algo passar batido no merge, o `apply`
+   para no ambiente `production` esperando aprovação manual (D4) — nada
+   chega à conta sem um clique deliberado.
+
+**Gatilho para revisar:** um segundo colaborador. Aí "quem mesclou não leu
+o plan" deixa de ser hipótese, o argumento (2) cai, e vale pagar a
+complexidade do item (1).
 
 **Como se prova:** `actionlint` limpo antes de commitar, e o workflow
 exercitado de verdade no PR #19 — `plan` verde em 24s, autenticando via
 OIDC sem nenhuma chave estática, comentário publicado automaticamente no
 PR, resultado `No changes. Your infrastructure matches the configuration.`
 (o que também prova que o state aplicado localmente e o que o CI enxerga
-são o mesmo). O gate de aprovação do ambiente `production` bloqueando o
-`apply` continua **não exercitado** — só será, no primeiro merge que
-alterar `infra/**`.
+são o mesmo).
+
+O gate de aprovação também já foi exercitado, no merge do próprio PR #19:
+o job `apply` ficou parado em `waiting` até a aprovação manual, e só então
+rodou — terminando em `No changes` / `0 added, 0 changed, 0 destroyed`,
+que é o cenário ideal para estrear o gate (nenhuma mudança real em
+produção no primeiro uso).
+
+Um efeito colateral que só apareceu aí: o merge da Fase 6 (PR #18) tinha
+deixado um `apply` **também** parado no gate, desde a véspera. Como os
+dois compartilham o mesmo `concurrency group` com
+`cancel-in-progress: false` (proposital — nunca cortar um apply no meio),
+o run novo ficou bloqueado atrás do antigo, aparecendo como `pending` com
+zero jobs. O antigo foi **cancelado**, não aprovado: ele aplicaria a
+configuração anterior a todas as correções desta sessão, incluindo a que
+revogaria a conectividade API→RDS. Fica o alerta para quem operar isto
+depois: **um `apply` represado no gate carrega o commit da época em que
+foi enfileirado, não o estado atual do `main`** — ao encontrar um run
+antigo esperando aprovação, cancelar é quase sempre mais seguro que
+aprovar.
 
 ### Fase 7 — Deploy da aplicação
 
