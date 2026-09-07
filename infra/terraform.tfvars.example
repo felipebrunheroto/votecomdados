@@ -2,9 +2,12 @@
 # estes valores vêm de variáveis/segredos do GitHub Actions via -var, não
 # deste arquivo.
 
-dominio              = "votecomdados.com.br"
-billing_alert_email  = "seu-email-aqui@example.com"
-github_repo          = "felipebrunheroto/votecomdados"
+dominio             = "votecomdados.com.br"
+billing_alert_email = "seu-email-aqui@example.com"
+
+# github_sub_patterns tem default que já cobre este repositório (com e sem
+# os IDs numéricos do GitHub) — só precisa ser sobrescrito se o repo mudar
+# de dono/nome. Ver a descrição da variável em variables.tf.
 
 # Gerado uma única vez (ex.: `openssl rand -base64 32`) e nunca trocado —
 # ver secrets.tf.

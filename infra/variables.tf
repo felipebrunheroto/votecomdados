@@ -14,10 +14,26 @@ variable "billing_alert_email" {
   type        = string
 }
 
-variable "github_repo" {
-  description = "org/repo do GitHub, para a condição do trust policy do OIDC (Fase 6)."
-  type        = string
-  default     = "felipebrunheroto/votecomdados"
+variable "github_sub_patterns" {
+  description = <<-EOT
+    Padrões aceitos para a claim `sub` do token OIDC do GitHub, na condição
+    do trust policy da role de deploy (Fase 6).
+
+    São DOIS formatos de propósito. O GitHub emite hoje o formato com IDs
+    numéricos imutáveis do owner e do repositório embutidos
+    (`repo:owner@<id>/repo@<id>:...`) — descoberto via CloudTrail na
+    primeira aplicação real (07/09/2026), quando o `AssumeRoleWithWebIdentity`
+    falhava com AccessDenied contra um padrão que só tinha os nomes. Esses
+    IDs existem exatamente para que renomear (ou recriar com o mesmo nome)
+    um repositório não herde o acesso da role; são informação pública, não
+    segredo. O formato antigo, só por nome, fica na lista caso o GitHub
+    volte a emiti-lo — ambos são escopados a este repositório e só a ele.
+  EOT
+  type        = list(string)
+  default = [
+    "repo:felipebrunheroto@24783700/votecomdados@1354056011:*",
+    "repo:felipebrunheroto/votecomdados:*",
+  ]
 }
 
 variable "imagem_api_tag" {
