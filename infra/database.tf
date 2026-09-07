@@ -43,7 +43,7 @@ resource "aws_db_instance" "principal" {
   publicly_accessible    = false
   multi_az               = false # single-AZ, decisão explícita
 
-  backup_retention_period = 7
+  backup_retention_period = 7             # PITR — ver ARQUITETURA.md § 9 "Continuidade"
   backup_window           = "06:00-06:30" # cedo, fora do horário provável de tráfego BR
   maintenance_window      = "sun:07:00-sun:07:30"
 

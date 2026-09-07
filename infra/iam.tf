@@ -88,11 +88,12 @@ data "aws_iam_policy_document" "github_actions_assume" {
     # `:*` de propósito, não travado por branch: PRs de outros branches só
     # rodam `plan` (Fase 6, permissão de leitura); só o job de `apply` do
     # workflow, atrás do ambiente `production` com aprovação manual (D4),
-    # de fato muda algo.
+    # de fato muda algo. Os dois formatos aceitos de `sub` (com e sem os
+    # IDs numéricos do GitHub) estão explicados em `var.github_sub_patterns`.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:*"]
+      values   = var.github_sub_patterns
     }
   }
 }
@@ -131,8 +132,16 @@ data "aws_iam_policy_document" "github_actions_iam_escopado" {
       "iam:AttachRolePolicy",
       "iam:DetachRolePolicy",
       "iam:TagRole",
+      "iam:UntagRole",
       "iam:ListRolePolicies",
       "iam:ListAttachedRolePolicies",
+      "iam:ListInstanceProfilesForRole",
+      # Criar uma role com trust policy é `CreateRole`; ALTERAR a trust
+      # policy de uma role que já existe é uma ação diferente, e faltava —
+      # descoberto na prática (07/09/2026) ao corrigir o padrão de `sub` do
+      # OIDC: o apply falhou com AccessDenied em UpdateAssumeRolePolicy.
+      "iam:UpdateAssumeRolePolicy",
+      "iam:UpdateRole",
     ]
     resources = ["arn:aws:iam::*:role/votecomdados-*"]
   }
