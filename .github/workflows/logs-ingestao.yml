@@ -1,0 +1,69 @@
+name: Logs da ingestão
+
+# Observabilidade da ingestão sem credencial de longa duração.
+#
+# Depois do passo 7 de infra/PRIMEIRA_APLICACAO.md, o IAM user de
+# bootstrap ficou sem `logs:GetLogEvents` e sem `ecs:DescribeTasks` — o
+# que é correto do ponto de vista de menor privilégio, mas deixou um
+# buraco operacional real: a única forma de ler o log de uma ingestão que
+# falhou passou a ser o console como root. Isto resolve pelo mesmo caminho
+# que todo o resto usa: OIDC, sem chave estática, auditável no Actions.
+#
+# SEM o gate do ambiente `production`, de propósito: ler log é observação,
+# não mutação. Exigir aprovação para diagnosticar uma falha só faz o
+# incidente durar mais. O que protege aqui é a branch protection — alterar
+# este workflow exige PR no main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: "Buscar logs dos últimos N minutos"
+        type: string
+        required: false
+        default: "30"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # Vem PRIMEIRO porque é o diagnóstico mais rápido para a falha mais
+      # comum: se a task nem chegou a iniciar (imagem que não existe,
+      # secret inacessível, subnet sem rota), não há log de aplicação
+      # nenhum — só o `stoppedReason` conta o que houve.
+      - name: tasks paradas recentemente e por quê
+        run: |
+          set -euo pipefail
+          ARNS=$(aws ecs list-tasks --cluster votecomdados \
+            --family votecomdados-ingestion --desired-status STOPPED \
+            --query 'taskArns[]' --output text)
+
+          if [ -z "$ARNS" ]; then
+            echo "Nenhuma task parada encontrada."
+            exit 0
+          fi
+
+          # Array em vez de deixar o shell dividir a string: `describe-tasks`
+          # recebe vários ARNs como argumentos separados.
+          read -ra TASKS <<< "$ARNS"
+
+          aws ecs describe-tasks --cluster votecomdados --tasks "${TASKS[@]}" \
+            --query 'tasks[].{Task:taskArn,Parou:stoppedAt,Motivo:stoppedReason,
+                              Codigo:containers[0].exitCode,
+                              MotivoContainer:containers[0].reason}' \
+            --output table
+
+      - name: log da aplicação
+        run: |
+          aws logs tail /ecs/votecomdados-ingestion \
+            --since "${{ inputs.minutos }}m" --format short || \
+            echo "Sem eventos no período (ou o log group ainda não tem streams)."
