@@ -108,20 +108,17 @@ resource "aws_security_group" "ecs_api" {
   # referenciando aws_security_group.rds.id enquanto o SG do RDS também
   # referencia este SG criaria um ciclo de dependência que o Terraform não
   # resolve (`Cycle: aws_security_group.rds, aws_security_group.ecs_api`).
-
-  # HTTPS de saída (443) para o próprio Secrets Manager/ECR/CloudWatch —
-  # sem VPC endpoint nesta escala (custo não se paga sozinho com só duas
-  # tasks), então a chamada sai pela internet via o Internet Gateway da
-  # subnet pública. Não dá para escopar por CIDR: os IP ranges dessas APIs
-  # não são fixos nem publicados de um jeito prático de manter.
-  # trivy:ignore:AWS-0104 aceito — ver justificativa acima.
-  egress {
-    description = "AWS APIs (ECR, Secrets Manager, CloudWatch Logs)"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  #
+  # A regra de egress para as APIs da AWS (443) TAMBÉM vive fora deste
+  # bloco, por um motivo diferente e mais sutil: um security group com
+  # QUALQUER regra inline numa direção faz o Terraform tratar aquela
+  # direção inteira como propriedade exclusiva do bloco inline — qualquer
+  # regra criada por fora (como a de RDS acima) é vista como divergência e
+  # REVOGADA na próxima apply. Achado na prática: a primeira aplicação real
+  # (07/09/2026) gerou um plano que apagaria a regra de RDS por causa
+  # disso. Corrigido movendo esta regra também para recurso avulso, então
+  # `ecs_api` fica sem nenhum bloco `ingress`/`egress` inline — mesmo
+  # padrão que `rds` já usava desde o início.
 
   lifecycle { create_before_destroy = true }
   tags = { Name = "votecomdados-ecs-api" }
@@ -168,7 +165,7 @@ resource "aws_security_group" "rds" {
 resource "aws_vpc_security_group_egress_rule" "alb_para_api" {
   security_group_id            = aws_security_group.alb.id
   referenced_security_group_id = aws_security_group.ecs_api.id
-  description                  = "ALB -> API"
+  description                  = "ALB para API"
   ip_protocol                  = "tcp"
   from_port                    = 8080
   to_port                      = 8080
@@ -177,16 +174,30 @@ resource "aws_vpc_security_group_egress_rule" "alb_para_api" {
 resource "aws_vpc_security_group_ingress_rule" "api_de_alb" {
   security_group_id            = aws_security_group.ecs_api.id
   referenced_security_group_id = aws_security_group.alb.id
-  description                  = "ALB -> API"
+  description                  = "ALB para API"
   ip_protocol                  = "tcp"
   from_port                    = 8080
   to_port                      = 8080
 }
 
+# Sem VPC endpoint nesta escala (custo não se paga sozinho com só duas
+# tasks) — a chamada sai pela internet via o Internet Gateway. Não dá pra
+# escopar por CIDR: os IP ranges dessas APIs não são fixos nem publicados
+# de um jeito prático de manter.
+# trivy:ignore:AWS-0104
+resource "aws_vpc_security_group_egress_rule" "api_para_aws_apis" {
+  security_group_id = aws_security_group.ecs_api.id
+  cidr_ipv4         = "0.0.0.0/0"
+  description       = "AWS APIs (ECR, Secrets Manager, CloudWatch Logs)"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+}
+
 resource "aws_vpc_security_group_egress_rule" "api_para_rds" {
   security_group_id            = aws_security_group.ecs_api.id
   referenced_security_group_id = aws_security_group.rds.id
-  description                  = "API -> Postgres"
+  description                  = "API para Postgres"
   ip_protocol                  = "tcp"
   from_port                    = 5432
   to_port                      = 5432
@@ -195,7 +206,7 @@ resource "aws_vpc_security_group_egress_rule" "api_para_rds" {
 resource "aws_vpc_security_group_ingress_rule" "rds_de_api" {
   security_group_id            = aws_security_group.rds.id
   referenced_security_group_id = aws_security_group.ecs_api.id
-  description                  = "API -> Postgres"
+  description                  = "API para Postgres"
   ip_protocol                  = "tcp"
   from_port                    = 5432
   to_port                      = 5432
@@ -204,7 +215,7 @@ resource "aws_vpc_security_group_ingress_rule" "rds_de_api" {
 resource "aws_vpc_security_group_ingress_rule" "rds_de_ingestion" {
   security_group_id            = aws_security_group.rds.id
   referenced_security_group_id = aws_security_group.ecs_ingestion.id
-  description                  = "Worker -> Postgres"
+  description                  = "Worker para Postgres"
   ip_protocol                  = "tcp"
   from_port                    = 5432
   to_port                      = 5432
