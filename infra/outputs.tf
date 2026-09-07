@@ -2,6 +2,11 @@ output "cloudfront_domain" {
   value = aws_cloudfront_distribution.frontend.domain_name
 }
 
+output "cloudfront_distribution_id" {
+  description = "Usado pelo deploy do frontend (Fase 7) para invalidar o cache de borda após o sync."
+  value       = aws_cloudfront_distribution.frontend.id
+}
+
 output "alb_dns_name" {
   value = aws_lb.principal.dns_name
 }

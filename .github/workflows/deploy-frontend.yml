@@ -1,0 +1,136 @@
+name: Deploy frontend
+
+# Fase 7 do plano DevSecOps/IaC — implementa o pipeline já especificado em
+# docs/FRONTEND.md § 1 "Pipeline de rebuild" e § 9 "Deploy (CI)".
+#
+# O GATILHO É DE PUXAR, NÃO DE EMPURRAR. O cron compara o watermark da API
+# (`/meta/status`) com o do `build-info.json` publicado na CDN e só
+# reconstrói se forem diferentes. O desenho alternativo — o worker chamar
+# um webhook ao terminar a ingestão — foi rejeitado por falhar em silêncio
+# (achado A8): se a chamada se perdesse, o site nunca era reconstruído e
+# ninguém percebia. Aqui não existe mensagem para se perder, e uma execução
+# que falhe é corrigida pela seguinte, sem intervenção.
+
+on:
+  schedule:
+    - cron: "17 * * * *" # de hora em hora; 17 para não competir com o pico do topo da hora
+  push:
+    branches: [main]
+    paths: ["web/**"]
+  workflow_dispatch:
+    inputs:
+      forcar:
+        description: "Reconstruir mesmo se o watermark não mudou"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  API_URL: https://api.${{ vars.DOMINIO }}/api/v1
+  SITE_URL: https://${{ vars.DOMINIO }}
+
+jobs:
+  decidir:
+    runs-on: ubuntu-latest
+    outputs:
+      reconstruir: ${{ steps.comparar.outputs.reconstruir }}
+      watermark: ${{ steps.comparar.outputs.watermark }}
+    steps:
+      - id: comparar
+        run: |
+          set -euo pipefail
+
+          # Mudança em web/** ou disparo manual com `forcar` reconstroem
+          # sem consultar nada: o motivo do rebuild é o próprio código.
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.forcar }}" = "true" ]; then
+            echo "reconstruir=true" >> "$GITHUB_OUTPUT"
+            echo "watermark=" >> "$GITHUB_OUTPUT"
+            echo "Rebuild por mudança de código ou disparo manual."
+            exit 0
+          fi
+
+          # Falhar aqui é o comportamento certo: se a API não responde, não
+          # dá para saber se o site está defasado, e fingir que está tudo
+          # bem é justamente o modo de falha que este desenho existe para
+          # evitar.
+          atual="$(curl -fsS "$API_URL/meta/status" | sha256sum | cut -d' ' -f1)"
+
+          # O build-info.json pode não existir (primeiro deploy) — 404 aqui
+          # é "nunca publicamos", não erro.
+          anterior="$(curl -fsS "$SITE_URL/build-info.json" 2>/dev/null | jq -r '.watermark // ""' || echo "")"
+
+          echo "watermark=$atual" >> "$GITHUB_OUTPUT"
+
+          if [ "$atual" = "$anterior" ]; then
+            echo "reconstruir=false" >> "$GITHUB_OUTPUT"
+            echo "Watermark inalterado ($atual) — nada a fazer."
+          else
+            echo "reconstruir=true" >> "$GITHUB_OUTPUT"
+            echo "Watermark mudou: '$anterior' -> '$atual'."
+          fi
+
+  publicar:
+    needs: decidir
+    if: needs.decidir.outputs.reconstruir == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      # Com NEXT_PUBLIC_API_URL apontando para a API real, o
+      # generateStaticParams busca a lista de ids na API (não nas
+      # fixtures) — é o que faz o export conter os perfis de verdade.
+      - name: build do export estático
+        env:
+          NEXT_PUBLIC_API_URL: ${{ env.API_URL }}
+        run: npm run build
+
+      # O --exclude NÃO é detalhe: o site e o pacote de dados abertos
+      # dividem o prefixo `dados-abertos/` no mesmo bucket, e os
+      # instantâneos datados (publicados pela ingestão, não pelo build)
+      # não existem em ./out. Sem o exclude, o --delete os apagaria a cada
+      # publicação — e eles são endereço de citação imutável
+      # (docs/FRONTEND.md § 9).
+      - name: sync para o S3
+        run: |
+          aws s3 sync ./out "s3://${{ vars.FRONTEND_BUCKET }}" --delete \
+            --exclude 'dados-abertos/20*'
+
+      - name: publica o build-info.json com o watermark deste build
+        run: |
+          printf '{"watermark":"%s","commit":"%s","publicado_em":"%s"}\n' \
+            "${{ needs.decidir.outputs.watermark }}" \
+            "${{ github.sha }}" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > build-info.json
+          aws s3 cp build-info.json "s3://${{ vars.FRONTEND_BUCKET }}/build-info.json" \
+            --cache-control "no-cache"
+
+      - name: invalida o cache da CDN
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/*"

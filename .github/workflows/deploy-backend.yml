@@ -1,0 +1,94 @@
+name: Deploy backend
+
+# Fase 7 do plano DevSecOps/IaC. Builda as duas imagens (API e worker),
+# publica no ECR com a tag do commit e aponta o ECS service da API para a
+# revisão nova.
+#
+# Por que a tag é o SHA e nunca `latest`: os repositórios ECR são
+# `IMMUTABLE` (infra/ecr.tf) — uma tag, uma vez atribuída, não pode ser
+# reapontada. Isso é proposital: impede que "a imagem que está em
+# produção" mude embaixo de alguém sem rastro. O custo é que `latest`
+# deixa de existir como conceito, e toda referência precisa ser explícita.
+#
+# O `terraform apply` NÃO participa deste caminho: `aws_ecs_service.api`
+# tem `ignore_changes = [task_definition]` justamente para os dois não
+# brigarem (ver o comentário em infra/compute.tf).
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**"]
+  workflow_dispatch: # deploy manual, útil para o primeiro (o ECR começa vazio)
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false # nunca cortar um deploy no meio
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production # mesmo gate manual do terraform apply (D4)
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2.1.7
+
+      - name: build e push das duas imagens
+        working-directory: backend
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          for modulo in votecomdados-api votecomdados-ingestion; do
+            docker build -f "$modulo/Dockerfile" -t "$REGISTRY/$modulo:$TAG" .
+            docker push "$REGISTRY/$modulo:$TAG"
+          done
+
+      # O worker não é um service: quem o dispara é o EventBridge
+      # Scheduler, por FAMÍLIA (infra/scheduler.tf), então basta registrar
+      # a revisão nova — o próximo cron já pega. Não há nada para "atualizar".
+      - name: renderiza a task de ingestão com a imagem nova
+        id: render_ingestion
+        uses: aws-actions/amazon-ecs-render-task-definition@v1.9.0
+        with:
+          task-definition-family: votecomdados-ingestion
+          container-name: ingestion
+          image: ${{ steps.ecr.outputs.registry }}/votecomdados-ingestion:${{ github.sha }}
+
+      - name: registra a revisão nova da task de ingestão
+        run: |
+          aws ecs register-task-definition \
+            --cli-input-json "file://${{ steps.render_ingestion.outputs.task-definition }}"
+
+      - name: renderiza a task da API com a imagem nova
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1.9.0
+        with:
+          task-definition-family: votecomdados-api
+          container-name: api
+          image: ${{ steps.ecr.outputs.registry }}/votecomdados-api:${{ github.sha }}
+
+      - name: deploy no ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2.6.3
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: votecomdados-api
+          cluster: votecomdados
+          # Espera o deployment estabilizar antes de considerar sucesso —
+          # sem isso, um deploy que sobe e morre em loop passaria como
+          # verde. É o mesmo princípio do health check apontar para
+          # readiness e não para o agregado (ver BACKEND.md § 3).
+          wait-for-service-stability: true
