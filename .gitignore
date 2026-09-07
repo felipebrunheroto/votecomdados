@@ -28,3 +28,9 @@ crash.*.log
 .env
 .env.*
 !.env.*.example
+
+# Pacote de candidaturas do TSE — contém NR_CPF_CANDIDATO de ~20 mil
+# pessoas (ver docs/REVISAO_ARQUITETURA.md B1). Baixado manualmente pelo
+# owner e nunca versionado: este repositório é PÚBLICO.
+*.zip
+consulta_cand_*
