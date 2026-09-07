@@ -47,13 +47,61 @@ resource "aws_iam_role_policy" "scheduler_ingestao" {
   policy = data.aws_iam_policy_document.scheduler_ingestao_permissoes.json
 }
 
+# O `coorte` é pré-requisito diário dos demais, não só da carga inicial
+# (docs/BACKEND.md § "Tipos de job"): é ele que sincroniza a lista de
+# candidatos de 2026 no TSE e poda quem saiu. Sem este cron, alguém que
+# entra na coorte depois — registro deferido em recurso, substituição de
+# chapa — nunca apareceria, e a poda nunca aconteceria. Faltava: a Fase 5
+# só agendou o `incremental`.
+#
+# Uma hora antes do incremental, porque a ordem importa: votos e autoria
+# referenciam `politico` por FK (docs/BACKEND.md § "Ordem de ingestão").
+# Uma hora é folga generosa para um job que só lê o cadastro do TSE; se
+# um dia não for, o worker tem exclusão mútua por fonte e o incremental
+# falha visivelmente em vez de gravar dado órfão.
+resource "aws_scheduler_schedule" "coorte_diaria" {
+  name       = "votecomdados-coorte-diaria"
+  group_name = "default"
+
+  schedule_expression = "cron(0 5 * * ? *)" # 05:00 UTC = 02:00 BRT
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = "arn:aws:scheduler:::aws-sdk:ecs:runTask"
+    role_arn = aws_iam_role.scheduler_ingestao.arn
+
+    input = jsonencode({
+      Cluster        = aws_ecs_cluster.principal.arn
+      TaskDefinition = aws_ecs_task_definition.ingestion.family
+      LaunchType     = "FARGATE"
+      NetworkConfiguration = {
+        AwsvpcConfiguration = {
+          Subnets        = aws_subnet.publica[*].id
+          SecurityGroups = [aws_security_group.ecs_ingestion.id]
+          AssignPublicIp = "ENABLED"
+        }
+      }
+      Overrides = {
+        ContainerOverrides = [{
+          Name    = "ingestion"
+          Command = ["--job=COORTE"]
+        }]
+      }
+    })
+  }
+}
+
 resource "aws_scheduler_schedule" "ingestao_diaria" {
   name       = "votecomdados-ingestao-diaria"
   group_name = "default"
 
   # Horário de menor tráfego provável de leitores brasileiros — não é
   # requisito rígido, o cache de borda absorve o rebuild independente da
-  # hora (ver FRONTEND.md § 1 "Pipeline de rebuild").
+  # hora (ver FRONTEND.md § 1 "Pipeline de rebuild"). Roda depois do
+  # `coorte` (05:00), que é seu pré-requisito.
   schedule_expression = "cron(0 6 * * ? *)" # 06:00 UTC = 03:00 BRT
 
   flexible_time_window {
