@@ -27,6 +27,7 @@
     <java.version>21</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <testcontainers.version>2.0.5</testcontainers.version>
+    <awssdk.version>2.46.7</awssdk.version>
   </properties>
 
   <dependencyManagement>
@@ -35,6 +36,19 @@
         <groupId>org.testcontainers</groupId>
         <artifactId>testcontainers-bom</artifactId>
         <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <!--
+        SDK da AWS só no módulo de ingestão, e só para S3: é ele que entrega o
+        pacote do TSE ao container e publica os dados abertos (ver
+        ArmazenamentoDeObjetos). A API não depende disto — ela fala com o
+        Postgres por credencial, não com serviço da AWS.
+      -->
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>bom</artifactId>
+        <version>${awssdk.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>

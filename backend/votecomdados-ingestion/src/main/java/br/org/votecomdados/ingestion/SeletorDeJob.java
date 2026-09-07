@@ -4,6 +4,7 @@ import br.org.votecomdados.core.dominio.Enums.CasaLegislativa;
 import br.org.votecomdados.core.dominio.Enums.Fonte;
 import br.org.votecomdados.core.dominio.Enums.TipoJob;
 import br.org.votecomdados.ingestion.alesp.OrquestradorDaAlesp;
+import br.org.votecomdados.ingestion.armazenamento.ArmazenamentoDeObjetos;
 import br.org.votecomdados.ingestion.coorte.JobDeCoorte;
 import br.org.votecomdados.ingestion.coorte.LeitorDeArquivoTse;
 import br.org.votecomdados.ingestion.download.JobIncremental;
@@ -55,12 +56,14 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
     private final OrquestradorDoSenado senado;
     private final JobDeBackfill backfillCamara;
     private final ExportadorDeDadosAbertos exportador;
+    private final ArmazenamentoDeObjetos armazenamento;
     private int codigoDeSaida = 0;
 
     SeletorDeJob(ControleDeExecucaoService controle, JobDeCoorte coorte,
                  LeitorDeArquivoTse leitorTse, JobIncremental incremental,
                  OrquestradorDaAlesp alesp, OrquestradorDoSenado senado,
-                 JobDeBackfill backfillCamara, ExportadorDeDadosAbertos exportador) {
+                 JobDeBackfill backfillCamara, ExportadorDeDadosAbertos exportador,
+                 ArmazenamentoDeObjetos armazenamento) {
         this.controle = controle;
         this.coorte = coorte;
         this.leitorTse = leitorTse;
@@ -69,6 +72,7 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
         this.senado = senado;
         this.backfillCamara = backfillCamara;
         this.exportador = exportador;
+        this.armazenamento = armazenamento;
     }
 
     @Override
@@ -109,7 +113,7 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
                     throw new IllegalArgumentException(
                         "a coorte vem do TSE; --fonte=" + fonte + " nao faz sentido");
                 }
-                Path zip = caminhoObrigatorio(args, "arquivo");
+                Path zip = arquivoObrigatorio(args, "arquivo");
                 var linhas = zip.toString().toLowerCase(Locale.ROOT).endsWith(".zip")
                     ? leitorTse.ler(zip) : leitorTse.lerCsv(zip);
                 var r = coorte.carregarAno(execucao, linhas.iterator());
@@ -192,11 +196,39 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
         var destino = args.getOptionValues("dados-abertos");
         if (destino == null || destino.isEmpty()) return;
         try {
-            exportador.exportar(Path.of(destino.getFirst()));
+            String alvo = destino.getFirst();
+            if (ArmazenamentoDeObjetos.ehRemoto(alvo)) {
+                publicarNoObjectStorage(alvo);
+            } else {
+                exportador.exportar(Path.of(alvo));
+            }
         } catch (RuntimeException e) {
             log.warn("ingestao concluida, mas a publicacao dos dados abertos falhou; "
                      + "sera refeita no proximo ciclo", e);
         }
+    }
+
+    /**
+     * Gera o instantâneo num diretório temporário e o envia ao object storage.
+     *
+     * <p>A checagem de existência <b>antes</b> de exportar não é redundante com
+     * a que o exportador já faz: aquela olha o disco, e o disco aqui é sempre
+     * um temporário novo — logo sempre "livre". Sem esta, o upload
+     * sobrescreveria em silêncio um pacote já publicado, que é exatamente o
+     * que a regra do instantâneo datado existe para impedir (ARQUITETURA.md
+     * § 8b: dado citável que muda embaixo de quem citou não é evidência).
+     */
+    private void publicarNoObjectStorage(String uriBase) {
+        String base = uriBase.endsWith("/") ? uriBase.substring(0, uriBase.length() - 1) : uriBase;
+        String uriDoDia = base + "/" + LocalDate.now();
+
+        if (armazenamento.existeAlgoSob(uriDoDia)) {
+            throw new IllegalStateException(
+                uriDoDia + " ja existe; instantaneo datado nao e sobrescrito");
+        }
+
+        Path gerado = exportador.exportar(diretorioDeTrabalho());
+        armazenamento.enviarDiretorio(gerado, uriDoDia);
     }
 
     @Override
@@ -229,12 +261,27 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
         }
     }
 
-    private static Path caminhoObrigatorio(ApplicationArguments args, String nome) {
+    /**
+     * Resolve {@code --arquivo} para um caminho legível no disco, baixando do
+     * object storage antes se vier como {@code s3://bucket/chave}.
+     *
+     * <p>O pacote do TSE é baixado à mão pelo owner (o TSE bloqueia parte das
+     * máquinas — ver PLANO_IMPLEMENTACAO.md, W3) e colocado no bucket; sem
+     * este desvio não havia como entregá-lo a um container Fargate, e a
+     * coorte simplesmente não rodava em produção.
+     */
+    private Path arquivoObrigatorio(ApplicationArguments args, String nome) {
         var valores = args.getOptionValues(nome);
         if (valores == null || valores.isEmpty()) {
             throw new IllegalArgumentException("--" + nome + " e obrigatorio neste job");
         }
-        Path caminho = Path.of(valores.getFirst());
+        String valor = valores.getFirst();
+
+        if (ArmazenamentoDeObjetos.ehRemoto(valor)) {
+            return armazenamento.baixar(valor, diretorioDeTrabalho());
+        }
+
+        Path caminho = Path.of(valor);
         if (!Files.isReadable(caminho)) {
             throw new IllegalArgumentException("nao consigo ler " + caminho);
         }
