@@ -346,15 +346,32 @@ AWS-0178, AWS-0136) permanecem visíveis no scan, mas têm a mesma
 justificativa registrada no arquivo — nenhum é um risco não avaliado, só
 uma inconsistência da ferramenta em aplicar a supressão.
 
-**Como se prova:** `terraform fmt`/`validate` limpos (não precisam de
-credencial AWS — só sintaxe e consistência interna). `trivy config .`
-rodado e triado achado por achado. **`terraform plan`/`apply` ainda não
-foram rodados contra a conta real** — por decisão D3b, esta sessão nunca
-segurou credencial AWS, e a Fase 4 só criou o bucket de state e o provider
-OIDC, não uma credencial ampla o bastante para aplicar toda essa
-infraestrutura. Isso é trabalho da Fase 6 (pipeline) ou de uma primeira
-aplicação manual guiada, ainda não feita — declarado em aberto, não
-assumido como testado.
+**Como se prova:** `terraform fmt`/`validate` limpos, `trivy config .`
+triado achado por achado, e — desde 07/09/2026 — **aplicado de verdade
+contra a conta**: 74 recursos criados, `terraform plan` subsequente
+reportando `No changes. Your infrastructure matches the configuration.`
+Ver [`infra/PRIMEIRA_APLICACAO.md`](../infra/PRIMEIRA_APLICACAO.md) para o
+registro completo, incluindo os **cinco problemas que só apareceram na
+aplicação real** e que nenhuma validação local pegaria:
+
+1. Descrição de regra de security group com `>` — fora do charset aceito
+   pela API da AWS.
+2. Bloco `egress` inline convivendo com `aws_vpc_security_group_*_rule`
+   avulso no mesmo SG: o `plan` seguinte queria **revogar** a
+   conectividade API→RDS.
+3. Conta no "Free plan" da AWS, que não libera `db.t4g.small` (e cujo teto
+   de crédito é menor que a própria estimativa de 45 dias do projeto).
+4. Claim `sub` do OIDC no formato com IDs numéricos do GitHub, que a trust
+   policy não cobria — diagnosticado via CloudTrail, já que o erro do lado
+   do GitHub Actions era genérico demais.
+5. `iam:UpdateAssumeRolePolicy` faltando na policy escopada: criar role com
+   trust policy e alterar trust policy de role existente são ações
+   diferentes.
+
+Todos corrigidos no código. A lição transversal: `validate` e `plan` local
+provam sintaxe e coerência interna; só o `apply` contra a conta prova
+charset de API, semântica de propriedade de regra, plano de conta e
+formato de claim.
 
 ### Fase 6 — Pipeline de plan/apply ✅ Entregue (04/09/2026)
 
@@ -375,26 +392,30 @@ assumido como testado.
 
 **Ovo-e-galinha real, não hipotético:** este workflow autentica via a
 mesma role OIDC que o Terraform da Fase 5 cria — que só existe depois do
-primeiro `apply` bem-sucedido. Até lá, `plan`/`apply` aqui falham por
-design, não por bug. `infra/PRIMEIRA_APLICACAO.md` é o runbook dessa
-aplicação inicial (o owner roda, com o IAM user de bootstrap
-temporariamente ampliado — mesma disciplina D3b da Fase 4: esta sessão
-nunca segura credencial AWS). Só depois dela existir os quatro
-vars/secrets do GitHub Actions (`AWS_ROLE_ARN`, `TF_STATE_BUCKET`,
-`CPF_HMAC_PEPPER`, `BILLING_ALERT_EMAIL`) fazem sentido — `DOMINIO` já
-está configurado, é público, sem essa dependência.
+primeiro `apply` bem-sucedido. Resolvido em 07/09/2026 com a aplicação
+manual inicial, registrada em
+[`infra/PRIMEIRA_APLICACAO.md`](../infra/PRIMEIRA_APLICACAO.md) (o owner
+rodou, com o IAM user de bootstrap temporariamente ampliado e depois
+reduzido de volta — mesma disciplina D3b da Fase 4: esta sessão nunca
+segurou credencial AWS). Os quatro vars/secrets (`AWS_ROLE_ARN`,
+`TF_STATE_BUCKET`, `CPF_HMAC_PEPPER`, `BILLING_ALERT_EMAIL`) estão
+configurados, além de `DOMINIO`.
 
-**Deliberadamente não promovido a check obrigatório ainda:** branch
-protection continua só com `test`/`guards`/`build`/`newman` (Fase 1). Um
-check `plan` que falha por credencial ausente bloquearia todo PR até a
-primeira aplicação acontecer — entra na lista de required checks só
-depois de confirmado rodando de ponta a ponta (último passo de
-`infra/PRIMEIRA_APLICACAO.md`).
+**Ainda não promovido a check obrigatório:** branch protection continua só
+com `test`/`guards`/`build`/`newman` (Fase 1). Agora que `plan` roda verde
+de ponta a ponta, promovê-lo é uma decisão em aberto — o argumento a favor
+é óbvio; o argumento contra é que uma indisponibilidade da AWS ou uma
+expiração de credencial passaria a bloquear PRs que não tocam infra
+nenhuma.
 
-**Como se prova:** `actionlint` limpo antes de commitar. O resto —
-comentário automático no PR, gate de aprovação do ambiente `production`
-de fato bloqueando o `apply` — só é verificável depois da primeira
-aplicação existir; fica registrado como pendente, não como testado.
+**Como se prova:** `actionlint` limpo antes de commitar, e o workflow
+exercitado de verdade no PR #19 — `plan` verde em 24s, autenticando via
+OIDC sem nenhuma chave estática, comentário publicado automaticamente no
+PR, resultado `No changes. Your infrastructure matches the configuration.`
+(o que também prova que o state aplicado localmente e o que o CI enxerga
+são o mesmo). O gate de aprovação do ambiente `production` bloqueando o
+`apply` continua **não exercitado** — só será, no primeiro merge que
+alterar `infra/**`.
 
 ### Fase 7 — Deploy da aplicação
 
