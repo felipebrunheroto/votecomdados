@@ -65,8 +65,15 @@ resource "aws_scheduler_schedule" "ingestao_diaria" {
     role_arn = aws_iam_role.scheduler_ingestao.arn
 
     input = jsonencode({
-      Cluster        = aws_ecs_cluster.principal.arn
-      TaskDefinition = aws_ecs_task_definition.ingestion.arn
+      Cluster = aws_ecs_cluster.principal.arn
+      # Família, não o ARN com revisão fixa: `RunTask` com só a família
+      # roda a revisão ACTIVE mais recente. Com o ARN pinado, o cron
+      # continuaria rodando para sempre a revisão que existia no último
+      # `terraform apply` — ou seja, o worker nunca receberia uma imagem
+      # nova publicada pelo pipeline de deploy (Fase 7) sem um apply
+      # manual junto. A policy do scheduler já autoriza `:*` (qualquer
+      # revisão da família), então não precisa mudar.
+      TaskDefinition = aws_ecs_task_definition.ingestion.family
       LaunchType     = "FARGATE"
       NetworkConfiguration = {
         AwsvpcConfiguration = {

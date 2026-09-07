@@ -143,6 +143,20 @@ resource "aws_ecs_service" "api" {
     container_port   = 8080
   }
 
+  # A partir da Fase 7, quem troca a imagem em produção é o workflow de
+  # deploy (`.github/workflows/deploy-backend.yml`): ele registra uma
+  # revisão nova da task definition com a tag do commit e aponta o service
+  # para ela. Sem este `ignore_changes`, o `terraform apply` seguinte veria
+  # o service numa revisão que não é a que ele conhece e faria rollback
+  # para a imagem antiga — Terraform e pipeline se desfazendo em turnos.
+  #
+  # A divisão de responsabilidade fica: o Terraform é dono do que é
+  # infraestrutura da task (CPU, memória, env, secrets, logs, rede) e da
+  # revisão-base; o pipeline é dono de qual imagem roda.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
   depends_on = [aws_lb_listener.https]
 }
 
