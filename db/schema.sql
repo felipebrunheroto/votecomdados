@@ -316,7 +316,11 @@ CREATE TABLE proposicao (
     id_externo          TEXT NOT NULL,  -- id numérico (Câmara) ou código da matéria (Senado)
     sigla_tipo          TEXT NOT NULL,  -- PL, PEC, MPV, PLP...
     numero              INTEGER,
-    ano                 SMALLINT NOT NULL,
+    -- Nulo quando a peça não tem ano na designação oficial: parecer, emenda e
+    -- substitutivo são numerados dentro da tramitação de outra matéria. A
+    -- Câmara publica `ano: "0"` nesses casos; guardar o zero fazia "EMR 1/0"
+    -- e excluía do site peças do mandato corrente (ver V14).
+    ano                 SMALLINT,
     ementa              TEXT NOT NULL,
     data_apresentacao   DATE,
     situacao_atual      TEXT,
