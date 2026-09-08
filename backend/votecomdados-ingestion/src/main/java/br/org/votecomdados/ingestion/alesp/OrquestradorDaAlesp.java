@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -125,9 +126,19 @@ public class OrquestradorDaAlesp {
             naturezas = job.lerNaturezas(fluxo);
         }
 
+        // A autoria e lida ANTES da propositura, so para descobrir quais
+        // documentos tem autor na coorte -- e depois de novo, para gravar o
+        // vinculo. Reler custa I/O de arquivo local; a alternativa seria
+        // gravar 265 mil proposituras e apagar a maioria em seguida.
+        Set<String> comAutorNaCoorte;
+        try (var fluxo = leitor.lerDoZip(baixados.get("documento_autor.zip"),
+                                         "DocumentoAutor")) {
+            comAutorNaCoorte = job.documentosComAutorNaCoorte(fluxo);
+        }
+
         JobDaAlesp.Resultado props;
         try (var fluxo = leitor.lerDoZip(baixados.get("proposituras.zip"), "propositura")) {
-            props = job.carregarProposituras(execucao, fluxo, naturezas);
+            props = job.carregarProposituras(execucao, fluxo, comAutorNaCoorte, naturezas);
         }
 
         int autorias;

@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -436,8 +437,93 @@ class JobDaAlespTest {
         }
         try (var fluxo = leitor.ler(GOLDEN.resolve("alesp-proposituras-amostra.xml"),
                                     "propositura")) {
-            return job.carregarProposituras(execucao, fluxo, naturezas);
+            // Cenario em que todo documento da amostra tem autor na coorte: os
+            // casos que usam este helper testam ementa, duplicata e
+            // quarentena, nao o recorte. O recorte tem casos proprios.
+            return job.carregarProposituras(execucao, fluxo, todosOsDocumentos(), naturezas);
         }
+    }
+
+    private Set<String> todosOsDocumentos() {
+        try (var fluxo = leitor.ler(GOLDEN.resolve("alesp-proposituras-amostra.xml"),
+                                    "propositura")) {
+            var ids = new java.util.HashSet<String>();
+            fluxo.forEach(p -> {
+                var no = p.get("IdDocumento");
+                if (no != null && !no.asString().isBlank()) ids.add(no.asString());
+            });
+            return ids;
+        }
+    }
+
+    /**
+     * A Alesp gravava TODA propositura, sem filtro -- diferente da Camara, que
+     * sempre exigiu autor na coorte. Em 08/09/2026 o primeiro ciclo incremental
+     * completo levou a base de 46.433 para 346.481 proposicoes, e o build do
+     * site estourou a pilha do Next tentando gerar pagina para cada uma.
+     */
+    @Test
+    void propositura_de_quem_nao_e_da_coorte_nao_entra() {
+        Map<String, String> naturezas;
+        try (var fluxo = leitor.ler(GOLDEN.resolve("alesp-naturezas-amostra.xml"),
+                                    "natureza")) {
+            naturezas = job.lerNaturezas(fluxo);
+        }
+
+        JobDaAlesp.Resultado r;
+        try (var fluxo = leitor.ler(GOLDEN.resolve("alesp-proposituras-amostra.xml"),
+                                    "propositura")) {
+            r = job.carregarProposituras(execucao, fluxo, Set.of(), naturezas);
+        }
+
+        assertThat(r.gravadas()).isZero();
+        assertThat(contar("proposicao")).isZero();
+
+        // Fora do recorte nao e defeito do dado: nao pode virar quarentena,
+        // senao o painel de rejeicao encheria de ruido e esconderia problema
+        // de verdade.
+        assertThat(r.rejeitadas()).isZero();
+    }
+
+    /**
+     * O pre-passe e o equivalente ao EXISTS que a Camara faz dentro do SQL:
+     * descobre, antes de gravar, quais documentos tem autor resolvido.
+     */
+    @Test
+    void o_pre_passe_so_inclui_documento_com_autor_resolvido() {
+        naCoorte();
+        cadastro.carregar(execucao, cadastroDeDeputados().iterator(), leitorDeCadastro::ler);
+
+        // Os IdSPL da amostra de deputados e os IdAutor da amostra de autoria
+        // NAO se cruzam -- e esse foi o ponto cego: nenhum teste podia
+        // exercitar "autoria que resolve para a coorte" na Alesp, que e
+        // justamente o que faltava no codigo. Em producao eles compartilham o
+        // mesmo espaco de ids (metade das proposituras resolve autor).
+        jdbc.sql("""
+            INSERT INTO identificador_externo (politico_id, sistema, identificador)
+            SELECT p.id, 'ALESP', '177' FROM politico p LIMIT 1
+            """).update();
+
+        var comAutor = job.documentosComAutorNaCoorte(autorias());
+
+        assertThat(comAutor)
+            .as("a amostra tem autoria de deputado da coorte")
+            .isNotEmpty();
+
+        // Todo documento devolvido tem de ter ao menos uma autoria cujo IdAutor
+        // esteja em identificador_externo -- e nenhum outro.
+        var esperados = new java.util.HashSet<String>();
+        for (JsonNode a : autorias()) {
+            var doc = a.get("IdDocumento");
+            var autor = a.get("IdAutor");
+            if (doc == null || autor == null) continue;
+            boolean resolve = jdbc.sql("""
+                SELECT count(*) FROM identificador_externo
+                 WHERE sistema = 'ALESP' AND identificador = :id
+                """).param("id", autor.asString()).query(Long.class).single() > 0;
+            if (resolve) esperados.add(doc.asString());
+        }
+        assertThat(comAutor).isEqualTo(esperados);
     }
 
     private List<JsonNode> autorias() {
