@@ -138,8 +138,9 @@ public class JobDaAlesp {
      */
     public Resultado carregarProposituras(Execucao execucao,
                                           Iterable<? extends JsonNode> proposituras,
+                                          Set<String> comAutorNaCoorte,
                                           Map<String, String> naturezas) {
-        int gravadas = 0, duplicadas = 0, rejeitadas = 0;
+        int gravadas = 0, duplicadas = 0, rejeitadas = 0, foraDaCoorte = 0;
         var vistas = new HashSet<String>();
 
         for (JsonNode p : proposituras) {
@@ -155,6 +156,17 @@ public class JobDaAlesp {
                 duplicadas++;
                 continue;
             }
+
+            // O recorte do projeto e quem se apresenta ao eleitorado em 2026.
+            // Sem isto a Alesp gravava a serie inteira: 265 mil proposituras,
+            // a maioria de quem nao e candidato. Nao e rejeicao -- o dado nao
+            // tem defeito, so esta fora do recorte, entao nao vai para
+            // quarentena.
+            if (!comAutorNaCoorte.contains(id)) {
+                foraDaCoorte++;
+                continue;
+            }
+
             staging.gravar(execucao, "proposicao", id, p);
 
             String ementa = texto(p, "Ementa");
@@ -195,14 +207,49 @@ public class JobDaAlesp {
             gravadas++;
         }
 
-        log.info("alesp: {} proposituras gravadas, {} linhas duplicadas na origem, "
-                 + "{} rejeitadas", gravadas, duplicadas, rejeitadas);
+        log.info("alesp: {} proposituras gravadas, {} fora da coorte, "
+                 + "{} linhas duplicadas na origem, {} rejeitadas",
+                 gravadas, foraDaCoorte, duplicadas, rejeitadas);
         return new Resultado(gravadas, duplicadas, rejeitadas);
     }
 
     // ------------------------------------------------------------------------
     // Autoria
     // ------------------------------------------------------------------------
+
+    /**
+     * Documentos cuja autoria aponta para alguém da coorte.
+     *
+     * <p>É o equivalente ao filtro que a Câmara faz dentro do SQL (o
+     * {@code EXISTS} sobre {@code identificador_externo} em
+     * {@link br.org.votecomdados.ingestion.massa.JobDeBackfillCamara}). Aqui
+     * não dá para fazer no mesmo comando: a propositura é gravada linha a
+     * linha, antes de a autoria ser lida.
+     *
+     * <p>Custa reler o arquivo de autoria uma vez. Vale: sem este recorte a
+     * Alesp gravava TODA propositura, e em 08/09/2026 isso levou a base de
+     * 46 mil para 346 mil proposições -- centenas de milhares de páginas de
+     * quem não é candidato em 2026, que é o oposto do recorte do projeto.
+     */
+    public Set<String> documentosComAutorNaCoorte(Iterable<? extends JsonNode> autorias) {
+        var naCoorte = new HashMap<String, Boolean>();
+        var documentos = new HashSet<String>();
+
+        for (JsonNode a : autorias) {
+            String documento = texto(a, "IdDocumento");
+            String idAutor = texto(a, "IdAutor");
+            if (documento == null || idAutor == null) continue;
+            // Um id de autor se repete por milhares de documentos: sem o cache,
+            // seria uma consulta por linha num arquivo de 884 mil.
+            if (naCoorte.computeIfAbsent(idAutor, id -> politicoDe(id) != null)) {
+                documentos.add(documento);
+            }
+        }
+
+        log.info("alesp: {} documento(s) com autor na coorte, de {} autor(es) distinto(s)",
+                 documentos.size(), naCoorte.size());
+        return documentos;
+    }
 
     /**
      * Carrega a autoria.

@@ -123,6 +123,23 @@ class OrquestradorDaAlespTest {
     void ciclo_completo_resolve_carrega_e_fecha_a_ingestao(@TempDir Path dir) {
         naCoorte(NOME_ENIO_TATTO);
 
+        // A propositura so entra se tiver autor na coorte. Os IdSPL da amostra
+        // de deputados e os IdAutor da amostra de autoria nao se cruzam -- e
+        // esse desencontro e a razao de nenhum teste ter pego a falta do
+        // filtro na Alesp. Em producao os dois compartilham o mesmo espaco de
+        // ids: metade das proposituras resolve autor.
+        // Pessoa PROPRIA para o autor da amostra: grudar o vinculo no Enio
+        // Tatto daria a ele dois identificadores ALESP e quebraria a checagem
+        // logo abaixo, que exige que o vinculo dele tenha vindo de resolucao
+        // real (FUZZY), e nao de insert direto.
+        var autor = jdbc.sql(
+            "INSERT INTO politico (nome_civil) VALUES ('Autor Da Amostra') RETURNING id")
+            .query(UUID.class).single();
+        jdbc.sql("""
+            INSERT INTO identificador_externo (politico_id, sistema, identificador)
+            VALUES (:p, 'ALESP', '177')
+            """).param("p", autor).update();
+
         var r = orquestrador.executar(execucao, dir, null, enderecos);
 
         assertThat(r.houveMudanca()).isTrue();
