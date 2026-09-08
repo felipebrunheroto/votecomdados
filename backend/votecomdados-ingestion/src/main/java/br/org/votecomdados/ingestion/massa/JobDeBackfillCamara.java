@@ -223,7 +223,7 @@ public class JobDeBackfillCamara {
                                             url_inteiro_teor, url_tramitacao)
                     SELECT 'CAMARA', p."id", p."siglaTipo",
                            nullif(p."numero", '')::int,
-                           p."ano"::smallint,
+                           nullif(p."ano", '0')::smallint,
                            coalesce(nullif(p."ementa", ''),
                                     nullif(p."ementaDetalhada", '')),
                            nullif(p."dataApresentacao", '')::timestamp::date,

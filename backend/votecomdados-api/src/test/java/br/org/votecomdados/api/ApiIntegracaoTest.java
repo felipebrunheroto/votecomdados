@@ -281,6 +281,36 @@ class ApiIntegracaoTest {
     }
 
     /**
+     * Peça sem ano na designação — parecer, emenda, substitutivo. A fonte
+     * publica `ano: "0"`; guardar o zero produzia "EMR 1/0" no título e, pior,
+     * excluía do pré-render 16.902 peças do mandato corrente, porque
+     * `0 >= 2026` é falso.
+     *
+     * <p>Entra pela data de apresentação, e o ano volta nulo — não zero.
+     */
+    @Test
+    void peca_sem_ano_entra_pela_data_e_nao_finge_ter_ano() {
+        Long peca = jdbc.sql("""
+                INSERT INTO proposicao (casa, id_externo, sigla_tipo, numero, ano,
+                                        ementa, data_apresentacao, url_tramitacao)
+                VALUES ('CAMARA', :ext, 'EMR', 1, NULL, 'Emenda de relator',
+                        DATE '2026-04-10', 'https://exemplo/emr')
+                RETURNING id
+                """)
+            .param("ext", "emr-" + java.util.UUID.randomUUID())
+            .query(Long.class).single();
+
+        var lista = (List<Number>) obter("/api/v1/proposicoes").get("ids");
+        assertThat(lista.stream().map(Number::longValue))
+            .as("sem ano, mas apresentada em 2026: entra no prerender")
+            .contains(peca);
+
+        assertThat(obter("/api/v1/proposicoes/" + peca).get("ano"))
+            .as("ausencia e nula, nao zero -- zero pareceria um ano")
+            .isNull();
+    }
+
+    /**
      * O corte é sobre o que se PRÉ-RENDERIZA, não sobre o que existe.
      *
      * <p>Matéria anterior continua servida pela API — é ela que o fallback no

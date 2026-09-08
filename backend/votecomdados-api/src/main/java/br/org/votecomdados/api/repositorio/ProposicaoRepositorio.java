@@ -111,7 +111,10 @@ public class ProposicaoRepositorio {
     public List<Long> todosOsIds() {
         return jdbc.sql("""
                 SELECT id FROM proposicao
-                 WHERE ano >= :desde
+                 -- Peça sem ano (parecer, emenda) entra pela data de
+                 -- apresentação: excluí-la por não ter ano na designação
+                 -- deixaria de fora 16.902 peças do mandato corrente.
+                 WHERE coalesce(ano, extract(year FROM data_apresentacao)) >= :desde
                  ORDER BY id
                 """)
             .param("desde", ANO_DA_LEGISLATURA_CORRENTE)
@@ -125,7 +128,9 @@ public class ProposicaoRepositorio {
             Esfera.valueOf(rs.getString("esfera")),
             rs.getString("sigla_tipo"),
             intOuNulo(rs, "numero"),
-            rs.getInt("ano"),
+            // getObject num smallint devolve Short: ler assim mantem o tipo
+            // e ainda distingue "sem ano" de zero.
+            rs.getObject("ano") == null ? null : rs.getInt("ano"),
             rs.getString("ementa"),
             textoArray(rs, "temas"),
             dataOuNula(rs, "data_apresentacao"),

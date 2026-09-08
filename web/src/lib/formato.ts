@@ -111,3 +111,23 @@ const ROTULO_CASA: Record<string, string> = {
 export function rotularCasa(casa: string): string {
   return ROTULO_CASA[casa] ?? casa;
 }
+
+/**
+ * A designação oficial de uma matéria: `PL 1234/2026`.
+ *
+ * <p>Sem o ano quando ele não existe. Parecer, emenda e substitutivo são
+ * numerados dentro da tramitação de outra matéria e não carregam ano — a
+ * fonte publica `0`, e imprimir isso produzia "EMR 1/0". São 41.937 peças na
+ * base (08/09/2026), então não é caso de canto.
+ *
+ * <p>Existe como função única porque a designação aparece em quatro telas: se
+ * cada uma montasse a string, bastava esquecer de uma para o "/0" voltar.
+ */
+export function designarProposicao(p: {
+  siglaTipo: string;
+  numero: number | null;
+  ano: number | null;
+}): string {
+  const numero = p.numero ?? "";
+  return p.ano ? `${p.siglaTipo} ${numero}/${p.ano}` : `${p.siglaTipo} ${numero}`.trim();
+}

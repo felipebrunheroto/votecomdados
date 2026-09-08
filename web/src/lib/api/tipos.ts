@@ -141,7 +141,11 @@ export interface Proposicao {
   esfera: Esfera;
   siglaTipo: string;
   numero: number;
-  ano: number;
+  /**
+   * Nulo quando a peça não tem ano na designação oficial — parecer, emenda e
+   * substitutivo são numerados dentro da tramitação de outra matéria.
+   */
+  ano: number | null;
   ementa: string;
   temas: string[];
   dataApresentacao: string | null;
