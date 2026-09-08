@@ -219,27 +219,91 @@ class ApiIntegracaoTest {
      * do frontend já chamava por ela — respondia 500 disfarçado de "erro
      * interno" pelo handler genérico. Sem paginação de propósito: existe só
      * para alimentar o build estático, não para navegação.
+     *
+     * <p>Desde 08/09/2026 devolve a legislatura corrente, não tudo: o que ela
+     * alimenta é o pré-render, e 346 mil páginas estouravam o build.
      */
     @Test
     void lista_todos_os_ids_de_votacoes_sem_paginar() {
+        // A semente de dev é de legislatura anterior; garantir ao menos uma
+        // dentro do recorte, para o teste falar sobre o formato da rota e não
+        // sobre a data das fixtures.
+        umaVotacaoDe2026();
+
         var r = obter("/api/v1/votacoes");
         var ids = (List<Number>) r.get("ids");
 
         assertThat(ids).isNotEmpty();
         assertThat(ids.stream().map(Number::longValue))
             .containsExactlyInAnyOrderElementsOf(
-                jdbc.sql("SELECT id FROM votacao").query(Long.class).list());
+                jdbc.sql("SELECT id FROM votacao WHERE data_votacao >= DATE '2026-01-01'")
+                    .query(Long.class).list());
     }
 
     @Test
     void lista_todos_os_ids_de_proposicoes_sem_paginar() {
+        umaProposicaoDe2026();
+
         var r = obter("/api/v1/proposicoes");
         var ids = (List<Number>) r.get("ids");
 
         assertThat(ids).isNotEmpty();
         assertThat(ids.stream().map(Number::longValue))
             .containsExactlyInAnyOrderElementsOf(
-                jdbc.sql("SELECT id FROM proposicao").query(Long.class).list());
+                jdbc.sql("SELECT id FROM proposicao WHERE ano >= 2026")
+                    .query(Long.class).list());
+    }
+
+    private Long umaProposicaoDe2026() {
+        return jdbc.sql("""
+                INSERT INTO proposicao (casa, id_externo, sigla_tipo, numero, ano,
+                                        ementa, url_tramitacao)
+                VALUES ('CAMARA', :ext, 'PL', 7, 2026,
+                        'Materia da legislatura corrente', 'https://exemplo/2026')
+                RETURNING id
+                """)
+            // id_externo unico por chamada: os testes dividem o mesmo banco.
+            .param("ext", "teste-2026-" + java.util.UUID.randomUUID())
+            .query(Long.class).single();
+    }
+
+    private void umaVotacaoDe2026() {
+        Long proposicao = umaProposicaoDe2026();
+        jdbc.sql("""
+                INSERT INTO votacao (casa, id_externo, proposicao_id, data_votacao,
+                                     descricao, tipo, ambito, url_fonte)
+                VALUES ('CAMARA', :ext, :p, TIMESTAMPTZ '2026-03-04 14:00Z',
+                        'Deliberacao de teste', 'NOMINAL', 'PLENARIO',
+                        'https://exemplo/votacao')
+                """)
+            .param("ext", "votacao-teste-2026-" + java.util.UUID.randomUUID())
+            .param("p", proposicao).update();
+    }
+
+    /**
+     * O corte é sobre o que se PRÉ-RENDERIZA, não sobre o que existe.
+     *
+     * <p>Matéria anterior continua servida pela API — é ela que o fallback no
+     * navegador (`not-found.tsx`) busca para montar a página. Se esta rota
+     * passasse a esconder o registro, o corte deixaria de ser "sem página
+     * pronta" e viraria "sumiu do site".
+     */
+    @Test
+    void materia_de_legislatura_anterior_sai_do_prerender_mas_continua_acessivel() {
+        Long antiga = jdbc.sql("""
+                INSERT INTO proposicao (casa, id_externo, sigla_tipo, numero, ano,
+                                        ementa, url_tramitacao)
+                VALUES ('CAMARA', 'teste-2019', 'PL', 1, 2019,
+                        'Materia de outra legislatura', 'https://exemplo/2019')
+                RETURNING id
+                """).query(Long.class).single();
+
+        var lista = (List<Number>) obter("/api/v1/proposicoes").get("ids");
+        assertThat(lista.stream().map(Number::longValue)).doesNotContain(antiga);
+
+        assertThat(obter("/api/v1/proposicoes/" + antiga).get("ano"))
+            .as("fora do prerender, mas a API continua respondendo")
+            .isEqualTo(2019);
     }
 
     @Test
