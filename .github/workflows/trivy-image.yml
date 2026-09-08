@@ -13,6 +13,21 @@ on:
     paths: ["backend/**"]
   pull_request:
     paths: ["backend/**"]
+  # CVE nova não espera commit nosso.
+  #
+  # Os gatilhos acima só disparam com mudança em `backend/**`, então uma
+  # semana sem tocar no backend é uma semana sem olhar a imagem. Em
+  # 07/09/2026 três CVEs CRITICAL de bypass de autenticação no Tomcat
+  # estavam na imagem EM PRODUÇÃO, e só apareceram porque um PR por acaso
+  # tocou em `backend/**` -- o gate não tinha tido chance de falar antes.
+  #
+  # Segunda de manhã, e não sexta: achado de segurança precisa cair num dia
+  # em que dê para agir sobre ele. 06:23 acompanha o CodeQL (06:00 do mesmo
+  # dia) sem disputar runner com ele -- a varredura semanal de segurança fica
+  # num bloco só, em vez de espalhada pela semana.
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
 
 concurrency:
   group: trivy-image-${{ github.ref }}
@@ -40,6 +55,31 @@ jobs:
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+
+      # Sem isto, a falha aparece como um X vermelho e o motivo fica enterrado
+      # no log do passo. Para o disparo semanal isso é decisivo: quem recebe a
+      # notificação precisa ver O QUE está vulnerável sem abrir o run.
+      - name: resumo do que falhou
+        if: failure()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.modulo }}:${{ github.sha }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          output: achados-${{ matrix.modulo }}.txt
+
+      - name: publica o resumo
+        if: failure()
+        run: |
+          {
+            echo "### CRITICAL com correção disponível em \`${{ matrix.modulo }}\`"
+            echo ""
+            echo '```'
+            cat achados-${{ matrix.modulo }}.txt || echo "(sem detalhe: o scan nao chegou a rodar)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: SBOM (CycloneDX)
         uses: aquasecurity/trivy-action@v0.36.0
