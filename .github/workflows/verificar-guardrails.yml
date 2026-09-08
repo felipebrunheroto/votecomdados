@@ -1,0 +1,163 @@
+name: Verificar guardrails
+
+# Fase 8 do plano DevSecOps/IaC: "alarme não testado é alarme que não existe".
+#
+# Existe porque três coisas podem estar erradas SEM nenhum sinal:
+#
+#   1. A assinatura de e-mail do SNS fica `PendingConfirmation` até alguém
+#      clicar no link que a AWS manda. Nesse estado o alarme dispara e a
+#      notificação não chega a lugar nenhum.
+#   2. A métrica AWS/Billing só existe se "Receive Billing Alerts" estiver
+#      ligado em Billing Preferences — configuração de conta, que o Terraform
+#      não consegue ligar. Sem isso os alarmes de custo ficam para sempre em
+#      INSUFFICIENT_DATA, sem nunca disparar.
+#   3. O backup pode estar configurado e nunca ter produzido snapshot.
+#
+# Só leitura por padrão. O teste de ENTREGA (que manda e-mail de verdade) é
+# opt-in, porque acionar alarme de produção sem avisar confunde quem vê.
+
+on:
+  workflow_dispatch:
+    inputs:
+      testar_entrega:
+        description: "Forca o alarme de billing 50% para ALARM e volta — manda e-mail DE VERDADE"
+        type: boolean
+        default: false
+  schedule:
+    # Segunda 06:40 UTC, junto do CodeQL (06:00) e do Trivy (06:23): a
+    # conferencia semanal fica num bloco so.
+    - cron: "40 6 * * 1"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: a assinatura de e-mail esta confirmada?
+        run: |
+          set -euo pipefail
+          TOPICO=$(aws sns list-topics \
+            --query "Topics[?ends_with(TopicArn, ':votecomdados-alarmes')].TopicArn | [0]" \
+            --output text)
+
+          if [ "$TOPICO" = "None" ] || [ -z "$TOPICO" ]; then
+            echo "::error::topico votecomdados-alarmes nao existe"
+            exit 1
+          fi
+
+          PENDENTES=$(aws sns list-subscriptions-by-topic --topic-arn "$TOPICO" \
+            --query "length(Subscriptions[?SubscriptionArn=='PendingConfirmation'])" \
+            --output text)
+          CONFIRMADAS=$(aws sns list-subscriptions-by-topic --topic-arn "$TOPICO" \
+            --query "length(Subscriptions[?SubscriptionArn!='PendingConfirmation'])" \
+            --output text)
+
+          echo "assinaturas confirmadas: $CONFIRMADAS | pendentes: $PENDENTES"
+
+          if [ "$CONFIRMADAS" -eq 0 ]; then
+            echo "::error::nenhuma assinatura confirmada — TODO alarme deste projeto e mudo"
+            {
+              echo "### Nenhuma assinatura confirmada no SNS"
+              echo ""
+              echo "Os alarmes disparam e a notificacao nao chega. A AWS mandou um"
+              echo "e-mail de confirmacao para o endereco de billing quando o topico"
+              echo "foi criado — e preciso clicar no link dele."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: os alarmes de custo tem dado para avaliar?
+        run: |
+          set -euo pipefail
+          aws cloudwatch describe-alarms \
+            --alarm-names votecomdados-billing-50pct votecomdados-billing-80pct \
+                          votecomdados-billing-100pct votecomdados-5xx-sustentado \
+                          votecomdados-ingestao-falhou-2-dias \
+            --query 'MetricAlarms[].{Alarme:AlarmName,Estado:StateValue}' \
+            --output table | tee estados.txt
+
+          {
+            echo "### Estado dos alarmes"
+            echo ""
+            echo '```'
+            cat estados.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # INSUFFICIENT_DATA num alarme de billing quase sempre significa
+          # "Receive Billing Alerts" desligado nas preferencias da conta.
+          SEM_DADO=$(aws cloudwatch describe-alarms \
+            --alarm-names votecomdados-billing-50pct \
+            --query "length(MetricAlarms[?StateValue=='INSUFFICIENT_DATA'])" --output text)
+
+          if [ "$SEM_DADO" != "0" ]; then
+            echo "::error::billing-50pct sem dado — provavelmente 'Receive Billing Alerts' esta desligado"
+            {
+              echo ""
+              echo "**O alarme de billing nunca vai disparar.** A metrica AWS/Billing so"
+              echo "existe com _Receive Billing Alerts_ ligado em Billing Preferences —"
+              echo "e configuracao de conta, o Terraform nao liga."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: o backup do banco existe de fato?
+        run: |
+          set -euo pipefail
+          RETENCAO=$(aws rds describe-db-instances --db-instance-identifier votecomdados \
+            --query 'DBInstances[0].BackupRetentionPeriod' --output text)
+          ULTIMO=$(aws rds describe-db-snapshots --db-instance-identifier votecomdados \
+            --snapshot-type automated \
+            --query 'sort_by(DBSnapshots,&SnapshotCreateTime)[-1].SnapshotCreateTime' \
+            --output text)
+
+          echo "retencao: $RETENCAO dia(s) | snapshot mais recente: $ULTIMO"
+          {
+            echo ""
+            echo "### Backup"
+            echo ""
+            echo "- retencao: **$RETENCAO dia(s)**"
+            echo "- snapshot automatico mais recente: **$ULTIMO**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$ULTIMO" = "None" ]; then
+            echo "::error::nenhum snapshot automatico — backup configurado nao e backup existente"
+            exit 1
+          fi
+
+      # Isto e o unico passo que MUDA algo, e por isso e opt-in. Forcar o
+      # estado e melhor que "gastar de proposito": a metrica de billing so
+      # atualiza a cada ~6h, e cruzar 50% de US$170 de verdade custaria
+      # US$85. O que precisa ser provado e o CAMINHO da notificacao, e esse
+      # e identico nos dois casos.
+      - name: teste de entrega (manda e-mail de verdade)
+        if: inputs.testar_entrega
+        run: |
+          set -euo pipefail
+          aws cloudwatch set-alarm-state \
+            --alarm-name votecomdados-billing-50pct \
+            --state-value ALARM \
+            --state-reason "Fase 8: teste de entrega da notificacao"
+
+          echo "alarme forcado para ALARM; devolvendo a OK"
+          aws cloudwatch set-alarm-state \
+            --alarm-name votecomdados-billing-50pct \
+            --state-value OK \
+            --state-reason "Fase 8: fim do teste"
+
+          {
+            echo ""
+            echo "### Teste de entrega disparado"
+            echo ""
+            echo "Confira a caixa de entrada do e-mail de billing: devem ter chegado"
+            echo "duas mensagens (ALARM e OK). Se nao chegaram, o problema esta na"
+            echo "entrega, nao na regra — e nenhum alarme deste projeto funciona."
+          } >> "$GITHUB_STEP_SUMMARY"
