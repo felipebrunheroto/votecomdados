@@ -48,11 +48,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Mudança em web/** ou disparo manual com `forcar` reconstroem
-          # sem consultar nada: o motivo do rebuild é o próprio código.
+          # Mudança em web/** ou disparo manual com `forcar` reconstroem sem
+          # PERGUNTAR se precisam: o motivo do rebuild é o próprio código, e
+          # uma API fora do ar não pode impedir a publicação de código novo.
+          #
+          # Mas o watermark ainda é registrado. Publicá-lo vazio fazia todo
+          # cron seguinte comparar hash-real contra "", concluir que o site
+          # estava defasado e reconstruir -- de hora em hora, para sempre.
+          # Aconteceu em 08/09/2026: um build de ~79 mil páginas por hora, com
+          # o S3 e a invalidação de CDN junto.
           if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.forcar }}" = "true" ]; then
             echo "reconstruir=true" >> "$GITHUB_OUTPUT"
-            echo "watermark=" >> "$GITHUB_OUTPUT"
+            # Pipeline IDENTICO ao do caminho normal, de proposito: "$(...)"
+            # come a quebra de linha final, entao computar o hash de outro
+            # jeito daria valor diferente para o mesmo corpo -- e a comparacao
+            # do ciclo seguinte nunca casaria.
+            if atual="$(curl -fsS "$API_URL/meta/status" | sha256sum | cut -d' ' -f1)"; then
+              echo "watermark=$atual" >> "$GITHUB_OUTPUT"
+            else
+              # Melhor esforço: sem watermark, o proximo ciclo reconstroi uma
+              # vez a mais e se corrige sozinho. Bloquear aqui seria pior.
+              echo "watermark=" >> "$GITHUB_OUTPUT"
+              echo "API nao respondeu; esta publicacao vai sem watermark."
+            fi
             echo "Rebuild por mudança de código ou disparo manual."
             exit 0
           fi
