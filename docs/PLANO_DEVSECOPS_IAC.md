@@ -471,14 +471,33 @@ contra o ambiente real, não só contra o `docker compose` local.
 
 Antes de começar a contar os 45 dias do plano de custo:
 
-1. Forçar um gasto pequeno de propósito e confirmar que o alarme de billing
-   de 50% dispara — alarme não testado é alarme que não existe.
-2. Teste de restore do backup (RDS/Cloud SQL) — mecânica automatizável,
-   verificação manual, dentro da janela dos 45 dias (nota já presente em
-   ambos `CUSTOS_INFRA_*.md`).
-3. Confirmar que a regra de rate limiting do WAF/Cloud Armor de fato
-   bloqueia, com um teste de carga leve e controlado — não um DAST agressivo
-   (ver § 8).
+1. Confirmar que o alarme de billing de 50% dispara **e que a notificação
+   chega** — alarme não testado é alarme que não existe.
+
+   **Revisado em 08/09/2026: não por "forçar um gasto pequeno".** A métrica
+   de billing só atualiza a cada ~6h, e cruzar 50% de US$170 exigiria gastar
+   US$85 de verdade — num projeto cujo orçamento inteiro é ~US$236. O que
+   precisa ser provado é o *caminho* da notificação, idêntico nos dois casos,
+   então o teste usa `cloudwatch set-alarm-state`: instantâneo e grátis.
+
+   Automatizado no workflow **Verificar guardrails**, que também cobre as
+   duas falhas silenciosas que ninguém veria: assinatura SNS em
+   `PendingConfirmation` (alarme dispara, e-mail não chega) e *Receive
+   Billing Alerts* desligado na conta (métrica não existe, alarme fica em
+   `INSUFFICIENT_DATA` para sempre).
+
+2. Teste de restore do backup (RDS) — runbook em `infra/FASE8.md`.
+   **Deliberadamente manual**: um restore cria instância que custa por hora,
+   e automatizá-lo sem supervisão é como descobrir semanas depois que ela
+   ficou de pé. O passo de apagar é o mais importante do runbook.
+
+3. Confirmar que a regra de rate limiting do WAF de fato bloqueia.
+   **✅ Verificado em 08/09/2026**, sem querer: uma rajada de requisições à
+   API, ao medir a distribuição de proposições por ano, levou HTTP 403. Não
+   foi o teste controlado previsto, mas prova o que ele queria provar — a
+   regra existe, está ativa e bloqueia. Um teste sintético contra a própria
+   produção acrescentaria risco sem acrescentar informação, que é o mesmo
+   argumento do § 8 contra DAST agressivo.
 
 Só depois desse checklist o relógio dos 45 dias de produção começa a valer.
 
