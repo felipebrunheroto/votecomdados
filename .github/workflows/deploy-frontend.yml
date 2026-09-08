@@ -95,6 +95,46 @@ jobs:
             echo "Watermark mudou: '$anterior' -> '$atual'."
           fi
 
+      # O build morre se `generateStaticParams` devolver lista vazia: com
+      # `output: export`, o Next exige ao menos uma rota gerada, e não há
+      # escape. Em 07/09/2026 isso custou dois runs inteiros para descobrir
+      # algo que uma chamada de um segundo responde -- e a mensagem do Next
+      # ("returned an empty array") não diz que a causa é a ingestão não ter
+      # rodado.
+      #
+      # Só `proposicoes` e `votacoes`: são as duas rotas que alimentam
+      # `generateStaticParams`. Perfil não entra -- são 28 mil candidatos,
+      # nunca foram pré-renderizados em massa, e dependem do fallback no
+      # navegador (ver web/src/app/not-found.tsx).
+      - name: confere que ha o que pre-renderizar
+        if: steps.comparar.outputs.reconstruir == 'true'
+        run: |
+          set -uo pipefail
+
+          for rota in proposicoes votacoes; do
+            if ! corpo="$(curl -fsS "$API_URL/$rota")"; then
+              echo "::error::a API nao respondeu em /$rota — o build falharia ao coletar as rotas"
+              exit 1
+            fi
+
+            quantos="$(printf '%s' "$corpo" | jq '.ids | length')"
+            echo "$rota: $quantos"
+
+            if [ "$quantos" -eq 0 ]; then
+              {
+                echo "### Build abortado: \`$rota\` está vazio"
+                echo ""
+                echo "\`generateStaticParams\` devolveria lista vazia, e o \`output: export\`"
+                echo "do Next recusa build sem nenhuma rota — não há escape para isso."
+                echo ""
+                echo "Causa provável: a ingestão ainda não rodou para esta fonte."
+                echo "Ver o workflow **Rodar ingestão**."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::$rota vazio — a ingestao precisa rodar antes do build"
+              exit 1
+            fi
+          done
+
   # SEM `environment: production` -- e a unica publicacao do projeto sem
   # portao manual, decidido em 08/09/2026.
   #
