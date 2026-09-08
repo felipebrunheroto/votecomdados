@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import org.slf4j.Logger;
@@ -55,30 +56,88 @@ public class LeitorDeArquivoTse {
      * passa de 400 mil — vale reconsiderar.
      */
     public List<JsonNode> ler(Path zip) {
-        var linhas = new ArrayList<JsonNode>();
-        try (ZipFile arquivo = new ZipFile(zip.toFile())) {
-            var entradas = arquivo.stream()
-                .filter(e -> !e.isDirectory())
-                .filter(e -> e.getName().toLowerCase().endsWith(".csv"))
-                // O consolidado nacional é a união exata das UFs: incluí-lo
-                // processaria tudo duas vezes.
-                .filter(e -> !e.getName().toUpperCase().endsWith("_BRASIL.CSV"))
-                .toList();
+        var todas = new ArrayList<JsonNode>();
+        porArquivoDeUf(zip, todas::addAll);
+        return todas;
+    }
 
+    /**
+     * Entrega um arquivo de UF por vez, em vez do zip inteiro de uma só.
+     *
+     * <p>É o que torna a eleição municipal viável. Uma eleição geral são ~21
+     * mil candidaturas; uma municipal passa de 400 mil — e materializar isso
+     * como {@code JsonNode} não cabe no heap da task de ingestão. Por UF, o
+     * pico é o maior estado, não o país.
+     *
+     * <p>Chamar {@code carregarAno} uma vez por arquivo é seguro: a coorte já
+     * era idempotente por {@code (sq_candidato, ano)}, e o expurgo do
+     * {@code cpf_hmac} acontece só no {@code encerrar}.
+     */
+    public void porArquivoDeUf(Path zip, Consumer<List<JsonNode>> consumidor) {
+        try (ZipFile arquivo = new ZipFile(zip.toFile())) {
+            var entradas = entradasDeUf(arquivo);
+
+            int total = 0;
             for (ZipEntry entrada : entradas) {
-                int antes = linhas.size();
+                var linhas = new ArrayList<JsonNode>();
                 try (BufferedReader r = new BufferedReader(new InputStreamReader(
                         arquivo.getInputStream(entrada), CODIFICACAO))) {
                     csv.ler(r, linhas);
                 }
-                log.debug("{}: {} candidatura(s)", entrada.getName(), linhas.size() - antes);
+                log.debug("{}: {} candidatura(s)", entrada.getName(), linhas.size());
+                total += linhas.size();
+                consumidor.accept(linhas);
             }
             log.info("TSE {}: {} candidatura(s) em {} arquivo(s) por UF",
-                     zip.getFileName(), linhas.size(), entradas.size());
-            return linhas;
+                     zip.getFileName(), total, entradas.size());
         } catch (IOException e) {
             throw new IllegalStateException("falha ao ler " + zip, e);
         }
+    }
+
+    /**
+     * O ano da eleição, lido só da primeira linha do primeiro arquivo.
+     *
+     * <p>Serve para ordenar os pacotes sem abrir nenhum por inteiro — abrir
+     * sete pacotes para decidir a ordem seria justamente o que não cabe na
+     * memória.
+     */
+    public int anoDaEleicao(Path zip) {
+        try (ZipFile arquivo = new ZipFile(zip.toFile())) {
+            var entradas = entradasDeUf(arquivo);
+            if (entradas.isEmpty()) return 0;
+
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(
+                    arquivo.getInputStream(entradas.getFirst()), CODIFICACAO))) {
+                String cabecalho = r.readLine();
+                String primeira = r.readLine();
+                if (cabecalho == null || primeira == null) return 0;
+
+                var colunas = LeitorDeCsv.separar(cabecalho.replace("\ufeff", ""));
+                int coluna = colunas.indexOf("ANO_ELEICAO");
+                if (coluna < 0) return 0;
+
+                var valores = LeitorDeCsv.separar(primeira);
+                if (coluna >= valores.size()) return 0;
+                return Integer.parseInt(valores.get(coluna).trim());
+            }
+        } catch (IOException | NumberFormatException e) {
+            // Sem ano legivel, o pacote perde a disputa pela primeira posicao.
+            // Nao e motivo para abortar: quem decide se ele serve e o job.
+            log.warn("nao consegui ler o ano de {}", zip.getFileName(), e);
+            return 0;
+        }
+    }
+
+    private static List<ZipEntry> entradasDeUf(ZipFile arquivo) {
+        return arquivo.stream()
+            .filter(e -> !e.isDirectory())
+            .filter(e -> e.getName().toLowerCase().endsWith(".csv"))
+            // O consolidado nacional é a união exata das UFs: incluí-lo
+            // processaria tudo duas vezes.
+            .filter(e -> !e.getName().toUpperCase().endsWith("_BRASIL.CSV"))
+            .map(ZipEntry.class::cast)
+            .toList();
     }
 
     /**
