@@ -43,7 +43,7 @@ on:
         type: string
         required: false
       arquivo:
-        description: "Obrigatório no COORTE — s3://bucket/entrada/consulta_cand_2026.zip"
+        description: "COORTE: pacotes do TSE separados por espaco. O de 2026 e obrigatorio; a ordem nao importa"
         type: string
         required: false
 
@@ -66,6 +66,18 @@ jobs:
           aws-region: us-east-1
 
       - name: monta o comando e dispara a task
+        # Os inputs entram por ENV, nunca interpolados direto no script.
+        # `${{ }}` dentro de `run` e substituido ANTES de o shell rodar: um
+        # valor com aspas ou `;` viraria comando. Por env, o shell trata tudo
+        # como dado. (Documentacao do GitHub, "Understanding the risk of
+        # script injections".)
+        env:
+          JOB: ${{ inputs.job }}
+          FONTE: ${{ inputs.fonte }}
+          ANO: ${{ inputs.ano }}
+          DESDE: ${{ inputs.desde }}
+          ATE: ${{ inputs.ate }}
+          PACOTES: ${{ inputs.arquivo }}
         run: |
           set -euo pipefail
 
@@ -78,12 +90,22 @@ jobs:
             --filters "Name=tag:Name,Values=votecomdados-ecs-ingestion" \
             --query 'SecurityGroups[0].GroupId' --output text)
 
-          COMANDO="[\"--job=${{ inputs.job }}\""
-          if [ -n "${{ inputs.fonte }}" ]; then COMANDO="$COMANDO,\"--fonte=${{ inputs.fonte }}\""; fi
-          if [ -n "${{ inputs.ano }}" ]; then COMANDO="$COMANDO,\"--ano=${{ inputs.ano }}\""; fi
-          if [ -n "${{ inputs.desde }}" ]; then COMANDO="$COMANDO,\"--desde=${{ inputs.desde }}\""; fi
-          if [ -n "${{ inputs.ate }}" ]; then COMANDO="$COMANDO,\"--ate=${{ inputs.ate }}\""; fi
-          if [ -n "${{ inputs.arquivo }}" ]; then COMANDO="$COMANDO,\"--arquivo=${{ inputs.arquivo }}\""; fi
+          COMANDO="[\"--job=$JOB\""
+          [ -n "$FONTE" ] && COMANDO="$COMANDO,\"--fonte=$FONTE\""
+          [ -n "$ANO" ]   && COMANDO="$COMANDO,\"--ano=$ANO\""
+          [ -n "$DESDE" ] && COMANDO="$COMANDO,\"--desde=$DESDE\""
+          [ -n "$ATE" ]   && COMANDO="$COMANDO,\"--ate=$ATE\""
+
+          # Um --arquivo por pacote. A trajetoria eleitoral so se forma se as
+          # eleicoes anteriores entrarem na MESMA execucao que a de 2026: o
+          # cpf_hmac e quem costura a mesma pessoa entre pleitos, e ele e
+          # expurgado ao fim do job.
+          if [ -n "$PACOTES" ]; then
+            read -ra lista <<< "$PACOTES"
+            for pacote in "${lista[@]}"; do
+              COMANDO="$COMANDO,\"--arquivo=$pacote\""
+            done
+          fi
           COMANDO="$COMANDO]"
 
           echo "Disparando: $COMANDO"
@@ -103,7 +125,7 @@ jobs:
           # (CUSTOS_INFRA_AWS.md), muito além do limite de 6h de um job do
           # GitHub Actions. Acompanhar é pelo log, não por este workflow.
           {
-            echo "### Ingestão \`${{ inputs.job }}\` disparada"
+            echo "### Ingestão \`$JOB\` disparada"
             echo ""
             echo "Task: \`$ARN\`"
             echo ""

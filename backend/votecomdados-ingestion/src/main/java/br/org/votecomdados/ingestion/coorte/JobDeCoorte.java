@@ -98,6 +98,18 @@ public class JobDeCoorte {
      * o HMAC antes de ele ter costurado a trajetória.
      */
     public void encerrar() {
+        // A poda apaga quem NAO tem candidatura no ano da coorte. Se o ano da
+        // coorte nao tem candidatura nenhuma, isso e "apague todo mundo" --
+        // que e o resultado de rodar o job so com pacote de eleicao anterior.
+        // Falhar antes e melhor que descobrir pelo site vazio.
+        long naCoorte = repositorio.candidaturasEm(ANO_DA_COORTE);
+        if (naCoorte == 0) {
+            throw new IllegalStateException(
+                "nenhuma candidatura de " + ANO_DA_COORTE + " na base: a poda "
+                + "apagaria todo mundo. O pacote do ano da coorte precisa entrar "
+                + "na MESMA execucao que os anos anteriores");
+        }
+
         int podados = repositorio.podarForaDaCoorte(ANO_DA_COORTE);
         if (podados > 0) {
             log.info("poda: {} pessoa(s) deixaram de ser candidatas em {} e foram "
