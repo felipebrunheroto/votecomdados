@@ -1,6 +1,7 @@
 package br.org.votecomdados.ingestion.coorte;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.org.votecomdados.core.dominio.Enums.Fonte;
@@ -164,6 +165,39 @@ class JobDeCoorteTest {
             .isEqualTo(1);
         assertThat(contar("candidatura"))
             .as("as duas eleicoes na trajetoria")
+            .isEqualTo(2);
+    }
+
+    /**
+     * O último recurso da resolução — casar por nome civil + nascimento — só é
+     * alcançado quando a pessoa não foi achada nem por candidatura nem por
+     * CPF. Com uma eleição só, isso nunca acontecia.
+     *
+     * <p>Na carga multi-ano acontece o tempo todo: quem foi candidato em 2016
+     * e não é em 2026 não está na base e não tem CPF a casar. A consulta usava
+     * o parâmetro de nascimento duas vezes, e o segundo uso não tinha contexto
+     * de tipo — o Postgres recusava com "could not determine data type of
+     * parameter $3", derrubando a carga inteira (08/09/2026, ao chegar em
+     * 2016).
+     */
+    @Test
+    void candidato_desconhecido_cai_no_ultimo_recurso_sem_estourar() {
+        job.carregarAno(execucao, linhas(
+            candidatura("900000000041", 2026, "6", "SP", "PESSOA DA COORTE",
+                        "PESSOA COORTE", "11111111111")));
+
+        // Alguém de outra eleição, que não está na base, cujo CPF não casa
+        // com ninguém E SEM DATA DE NASCIMENTO. Os três juntos são o gatilho:
+        // sem data, o parâmetro vai como NULL sem tipo, e era aí que o
+        // Postgres desistia de inferir.
+        assertThatCode(() -> job.carregarAno(execucao, linhas(
+            semNascimento(candidatura("900000000042", 2016, "11", "SP",
+                                      "DESCONHECIDO DE 2016", "DESCONHECIDO",
+                                      "22222222222")))))
+            .doesNotThrowAnyException();
+
+        assertThat(contar("politico"))
+            .as("os dois entram; a poda e que decide depois quem fica")
             .isEqualTo(2);
     }
 
@@ -418,6 +452,13 @@ class JobDeCoorteTest {
 
     private java.util.Iterator<JsonNode> linhas(JsonNode... nos) {
         return List.of(nos).iterator();
+    }
+
+    /** A fonte nem sempre publica a data — e é isso que expõe o parâmetro sem tipo. */
+    private JsonNode semNascimento(JsonNode linha) {
+        var copia = (tools.jackson.databind.node.ObjectNode) linha;
+        copia.put("DT_NASCIMENTO", "");
+        return copia;
     }
 
     private JsonNode candidatura(String sq, int ano, String cdCargo, String uf,
