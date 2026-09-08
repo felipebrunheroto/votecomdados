@@ -35,7 +35,10 @@ public class LeitorDeCsv {
 
     private final ObjectMapper json;
 
-    LeitorDeCsv(ObjectMapper json) {
+    // Publico: o parser nao tem estado nem invariante a proteger, e ha teste
+    // que o constroi fora do contexto do Spring -- subir a aplicacao inteira,
+    // com banco, para exercitar leitura de CSV seria caro sem motivo.
+    public LeitorDeCsv(ObjectMapper json) {
         this.json = json;
     }
 

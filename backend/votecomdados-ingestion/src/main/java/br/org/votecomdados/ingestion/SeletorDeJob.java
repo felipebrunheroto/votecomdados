@@ -138,21 +138,36 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
                 // gravada. Se um pacote antigo fosse lido antes disso, aquelas
                 // linhas cairiam no casamento por nome+nascimento -- o
                 // resultado seria pior em silencio, sem erro nenhum.
-                var pacotes = new ArrayList<List<JsonNode>>();
-                for (Path arquivo : arquivosObrigatorios(args, "arquivo")) {
-                    pacotes.add(arquivo.toString().toLowerCase(Locale.ROOT).endsWith(".zip")
-                        ? leitorTse.ler(arquivo) : leitorTse.lerCsv(arquivo));
-                }
-                pacotes.sort(Comparator.comparing(
-                    linhas -> anoDoPacote(linhas) == JobDeCoorte.ANO_DA_COORTE ? 0 : 1));
+                //
+                // A ordem se decide lendo so a primeira linha de cada pacote:
+                // abrir os sete por inteiro para ordenar seria exatamente o
+                // que nao cabe na memoria.
+                var arquivos = new ArrayList<>(arquivosObrigatorios(args, "arquivo"));
+                arquivos.sort(Comparator.comparing(
+                    arquivo -> ehZip(arquivo) && leitorTse.anoDaEleicao(arquivo)
+                                   == JobDeCoorte.ANO_DA_COORTE ? 0 : 1));
 
                 int processados = 0, rejeitados = 0;
-                for (var linhas : pacotes) {
-                    log.info("coorte: carregando pacote da eleicao de {} ({} linha(s))",
-                             anoDoPacote(linhas), linhas.size());
-                    var parcial = coorte.carregarAno(execucao, linhas.iterator());
-                    processados += parcial.processados();
-                    rejeitados += parcial.rejeitados();
+                for (Path arquivo : arquivos) {
+                    log.info("coorte: carregando {}", arquivo.getFileName());
+                    if (ehZip(arquivo)) {
+                        // Um arquivo de UF por vez: a eleicao municipal passa
+                        // de 400 mil candidaturas, e materializar o pacote
+                        // inteiro nao cabe no heap da task.
+                        var parciais = new int[2];
+                        leitorTse.porArquivoDeUf(arquivo, linhas -> {
+                            var r2 = coorte.carregarAno(execucao, linhas.iterator());
+                            parciais[0] += r2.processados();
+                            parciais[1] += r2.rejeitados();
+                        });
+                        processados += parciais[0];
+                        rejeitados += parciais[1];
+                    } else {
+                        var parcial = coorte.carregarAno(
+                            execucao, leitorTse.lerCsv(arquivo).iterator());
+                        processados += parcial.processados();
+                        rejeitados += parcial.rejeitados();
+                    }
                 }
                 coorte.encerrar();
                 var r = new JobDeCoorte.Resultado(processados, rejeitados);
@@ -318,22 +333,8 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
      * este desvio não havia como entregá-lo a um container Fargate, e a
      * coorte simplesmente não rodava em produção.
      */
-    /**
-     * O ano da eleicao que o pacote cobre, lido da primeira linha.
-     *
-     * <p>Todas as linhas de um pacote do TSE sao da mesma eleicao; a primeira
-     * basta. Pacote vazio devolve 0, que so o faz perder a disputa pela
-     * primeira posicao -- e um pacote vazio nao tem nada a carregar mesmo.
-     */
-    private static int anoDoPacote(List<JsonNode> linhas) {
-        if (linhas.isEmpty()) return 0;
-        JsonNode ano = linhas.getFirst().get("ANO_ELEICAO");
-        if (ano == null) return 0;
-        try {
-            return Integer.parseInt(ano.asString().trim());
-        } catch (NumberFormatException naoEhNumero) {
-            return 0;
-        }
+    private static boolean ehZip(Path arquivo) {
+        return arquivo.toString().toLowerCase(Locale.ROOT).endsWith(".zip");
     }
 
     /**
