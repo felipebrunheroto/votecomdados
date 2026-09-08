@@ -18,7 +18,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
+import tools.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -113,11 +117,45 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
                     throw new IllegalArgumentException(
                         "a coorte vem do TSE; --fonte=" + fonte + " nao faz sentido");
                 }
-                Path zip = arquivoObrigatorio(args, "arquivo");
-                var linhas = zip.toString().toLowerCase(Locale.ROOT).endsWith(".zip")
-                    ? leitorTse.ler(zip) : leitorTse.lerCsv(zip);
-                var r = coorte.carregarAno(execucao, linhas.iterator());
+                // Um --arquivo por eleicao, e o `encerrar` UMA vez ao final.
+                //
+                // A trajetoria eleitoral (ARQUITETURA.md) so existe se as
+                // eleicoes anteriores entrarem junto com a de 2026 -- e junto
+                // e literal: quem costura a mesma pessoa entre pleitos e o
+                // cpf_hmac, porque o sq_candidato muda a cada eleicao. O
+                // `encerrar` expurga esse hmac. Carregar 2022 numa execucao
+                // SEPARADA, depois do expurgo, cairia no ultimo recurso da
+                // resolucao (nome civil + nascimento), que o proprio
+                // ServicoDeResolucaoDeIdentidade chama de mais fraco -- e em
+                // 21 mil pessoas um homonimo com a mesma data de nascimento
+                // atribuiria a candidatura de uma pessoa a outra.
+                // O pacote do ano da coorte vai PRIMEIRO, e isso nao pode
+                // depender de o operador lembrar.
+                //
+                // O cpf_hmac e expurgado ao fim de cada execucao, entao a base
+                // comeca sem ancora. Quem a repoe e o arquivo do ano da
+                // coorte, que reencontra cada pessoa pela candidatura ja
+                // gravada. Se um pacote antigo fosse lido antes disso, aquelas
+                // linhas cairiam no casamento por nome+nascimento -- o
+                // resultado seria pior em silencio, sem erro nenhum.
+                var pacotes = new ArrayList<List<JsonNode>>();
+                for (Path arquivo : arquivosObrigatorios(args, "arquivo")) {
+                    pacotes.add(arquivo.toString().toLowerCase(Locale.ROOT).endsWith(".zip")
+                        ? leitorTse.ler(arquivo) : leitorTse.lerCsv(arquivo));
+                }
+                pacotes.sort(Comparator.comparing(
+                    linhas -> anoDoPacote(linhas) == JobDeCoorte.ANO_DA_COORTE ? 0 : 1));
+
+                int processados = 0, rejeitados = 0;
+                for (var linhas : pacotes) {
+                    log.info("coorte: carregando pacote da eleicao de {} ({} linha(s))",
+                             anoDoPacote(linhas), linhas.size());
+                    var parcial = coorte.carregarAno(execucao, linhas.iterator());
+                    processados += parcial.processados();
+                    rejeitados += parcial.rejeitados();
+                }
                 coorte.encerrar();
+                var r = new JobDeCoorte.Resultado(processados, rejeitados);
                 // O watermark da coorte é o instante da coleta: o TSE não
                 // publica Last-Modified utilizável no pacote.
                 controle.concluir(execucao, Instant.now(), r.processados(), r.rejeitados());
@@ -280,22 +318,50 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
      * este desvio não havia como entregá-lo a um container Fargate, e a
      * coorte simplesmente não rodava em produção.
      */
-    private Path arquivoObrigatorio(ApplicationArguments args, String nome) {
+    /**
+     * O ano da eleicao que o pacote cobre, lido da primeira linha.
+     *
+     * <p>Todas as linhas de um pacote do TSE sao da mesma eleicao; a primeira
+     * basta. Pacote vazio devolve 0, que so o faz perder a disputa pela
+     * primeira posicao -- e um pacote vazio nao tem nada a carregar mesmo.
+     */
+    private static int anoDoPacote(List<JsonNode> linhas) {
+        if (linhas.isEmpty()) return 0;
+        JsonNode ano = linhas.getFirst().get("ANO_ELEICAO");
+        if (ano == null) return 0;
+        try {
+            return Integer.parseInt(ano.asString().trim());
+        } catch (NumberFormatException naoEhNumero) {
+            return 0;
+        }
+    }
+
+    /**
+     * Um ou mais arquivos, na ordem em que foram passados.
+     *
+     * <p>Cada {@code --arquivo} vira um elemento; repetir a opcao e como se
+     * pede varias eleicoes. Baixa cada URI {@code s3://} para um nome proprio,
+     * senao o segundo download sobrescreveria o primeiro.
+     */
+    private List<Path> arquivosObrigatorios(ApplicationArguments args, String nome) {
         var valores = args.getOptionValues(nome);
         if (valores == null || valores.isEmpty()) {
             throw new IllegalArgumentException("--" + nome + " e obrigatorio neste job");
         }
-        String valor = valores.getFirst();
 
-        if (ArmazenamentoDeObjetos.ehRemoto(valor)) {
-            return armazenamento.baixar(valor, diretorioDeTrabalho());
+        var caminhos = new ArrayList<Path>();
+        for (String valor : valores) {
+            if (ArmazenamentoDeObjetos.ehRemoto(valor)) {
+                caminhos.add(armazenamento.baixar(valor, diretorioDeTrabalho()));
+                continue;
+            }
+            Path caminho = Path.of(valor);
+            if (!Files.isReadable(caminho)) {
+                throw new IllegalArgumentException("nao consigo ler " + caminho);
+            }
+            caminhos.add(caminho);
         }
-
-        Path caminho = Path.of(valor);
-        if (!Files.isReadable(caminho)) {
-            throw new IllegalArgumentException("nao consigo ler " + caminho);
-        }
-        return caminho;
+        return caminhos;
     }
 
     private static int inteiro(ApplicationArguments args, String nome, int padrao) {

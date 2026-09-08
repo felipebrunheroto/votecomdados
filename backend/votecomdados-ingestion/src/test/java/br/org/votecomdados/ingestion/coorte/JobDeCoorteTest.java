@@ -1,6 +1,7 @@
 package br.org.votecomdados.ingestion.coorte;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.org.votecomdados.core.dominio.Enums.Fonte;
 import br.org.votecomdados.core.dominio.Enums.TipoJob;
@@ -93,6 +94,98 @@ class JobDeCoorteTest {
         var esferas = jdbc.sql("SELECT DISTINCT esfera::text FROM candidatura")
             .query(String.class).list();
         assertThat(esferas).containsExactlyInAnyOrder("MUNICIPAL", "FEDERAL", "ESTADUAL");
+    }
+
+    /**
+     * O caso do CLI: um {@code --arquivo} por eleição vira uma chamada de
+     * {@link JobDeCoorte#carregarAno} por pacote, e o {@code encerrar} vem UMA
+     * vez ao final.
+     *
+     * <p>O teste acima prova que a trajetória se forma quando os anos chegam
+     * juntos numa chamada só — e era isso que já funcionava. O que faltava era
+     * o caminho real: arquivos separados, expurgo depois de todos. Se
+     * {@code encerrar} rodasse entre um arquivo e outro, o {@code cpf_hmac}
+     * sumiria antes de costurar a pessoa, e a candidatura seguinte criaria
+     * alguém novo.
+     */
+    @Test
+    void arquivos_separados_na_mesma_execucao_costuram_a_mesma_pessoa() {
+        job.carregarAno(execucao, linhas(
+            candidatura("900000000011", 2022, "6", "SP", "JOAO PEREIRA LIMA",
+                        "JOAO LIMA", "55566677788")));
+        job.carregarAno(execucao, linhas(
+            candidatura("900000000012", 2026, "6", "SP", "JOAO PEREIRA LIMA",
+                        "JOAO LIMA", "55566677788")));
+
+        job.encerrar();
+
+        assertThat(contar("politico"))
+            .as("mesmo CPF em dois arquivos: uma pessoa so")
+            .isEqualTo(1);
+        assertThat(contar("candidatura"))
+            .as("a trajetoria mantem as duas candidaturas")
+            .isEqualTo(2);
+    }
+
+    /**
+     * O caso que quase passou batido: numa REEXECUÇÃO, o `cpf_hmac` já foi
+     * expurgado, então a base começa sem âncora. Se o arquivo do ano da coorte
+     * não a repusesse, o pacote da eleição anterior cairia no casamento por
+     * nome + nascimento.
+     *
+     * <p>O nome civil aqui é DIFERENTE entre as duas eleições — casamento por
+     * nome falharia. Se a pessoa continua uma só, foi o CPF que costurou.
+     */
+    @Test
+    void reexecucao_volta_a_costurar_por_cpf_e_nao_por_nome() {
+        // Primeira execução: só 2026, e o expurgo ao fim.
+        job.carregarAno(execucao, linhas(
+            candidatura("900000000031", 2026, "6", "SP", "CARLA MENDES DE SOUZA",
+                        "CARLA MENDES", "12312312312")));
+        job.encerrar();
+
+        assertThat(jdbc.sql("SELECT count(*) FROM politico WHERE cpf_hmac IS NOT NULL")
+            .query(Long.class).single())
+            .as("precondicao: o expurgo levou a ancora embora")
+            .isZero();
+
+        // Reexecução: 2026 de novo (repõe a âncora) e depois 2022, com nome
+        // civil diferente — só o CPF pode ligar os dois.
+        job.carregarAno(execucao, linhas(
+            candidatura("900000000031", 2026, "6", "SP", "CARLA MENDES DE SOUZA",
+                        "CARLA MENDES", "12312312312")));
+        job.carregarAno(execucao, linhas(
+            candidatura("900000000032", 2022, "6", "SP", "CARLA M. DE SOUZA LIMA",
+                        "CARLA MENDES", "12312312312")));
+        job.encerrar();
+
+        assertThat(contar("politico"))
+            .as("mesmo CPF, nomes diferentes: uma pessoa so")
+            .isEqualTo(1);
+        assertThat(contar("candidatura"))
+            .as("as duas eleicoes na trajetoria")
+            .isEqualTo(2);
+    }
+
+    /**
+     * A poda apaga quem não tem candidatura no ano da coorte. Rodar o job só
+     * com pacote de eleição anterior torna isso "apague todo mundo" — e o
+     * sintoma seria o site vazio, não um erro.
+     */
+    @Test
+    void encerrar_recusa_podar_quando_o_ano_da_coorte_nao_entrou() {
+        job.carregarAno(execucao, linhas(
+            candidatura("900000000021", 2022, "6", "SP", "ANA RIBEIRO COSTA",
+                        "ANA COSTA", "99988877766")));
+
+        assertThatThrownBy(() -> job.encerrar())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("2026")
+            .hasMessageContaining("MESMA execucao");
+
+        assertThat(contar("politico"))
+            .as("nada foi apagado")
+            .isEqualTo(1);
     }
 
     @Test

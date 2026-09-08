@@ -145,6 +145,12 @@ public class RepositorioDeCoorte {
      * <p>Recuperar depois é barato (reingestão pelos CSVs arquivados), então a
      * decisão erra para o lado de guardar menos.
      */
+    /** Quantas candidaturas do ano existem — a base da poda. */
+    public long candidaturasEm(int ano) {
+        return jdbc.sql("SELECT count(*) FROM candidatura WHERE ano_eleicao = :ano")
+            .param("ano", ano).query(Long.class).single();
+    }
+
     public int podarForaDaCoorte(int anoDaCoorte) {
         return jdbc.sql("""
                 DELETE FROM politico p
@@ -176,15 +182,25 @@ public class RepositorioDeCoorte {
     private void atualizarDadosPessoais(UUID id, CandidaturaDoTse c) {
         // A candidatura mais recente manda: nome de urna e partido mudam entre
         // eleições, e o perfil deve mostrar o mais atual.
+        //
+        // `cpf_hmac` volta a ser preenchido de propósito. Ele é expurgado ao
+        // fim de CADA execução (minimização, ARQUITETURA.md § 10), então numa
+        // reexecução a base começa sem âncora nenhuma. Sem restaurá-lo aqui,
+        // o pacote de uma eleição anterior não teria como casar por CPF e
+        // cairia no último recurso -- nome civil + nascimento --, que é
+        // justamente o que a âncora existe para evitar. Ele volta a ser
+        // expurgado no `encerrar`, então não fica em repouso.
         jdbc.sql("""
                 UPDATE politico
-                   SET nome_urna = coalesce(:urna, nome_urna),
+                   SET cpf_hmac = coalesce(:hmac, cpf_hmac),
+                       nome_urna = coalesce(:urna, nome_urna),
                        data_nascimento = coalesce(:nascimento, data_nascimento),
                        genero = coalesce(:genero, genero),
                        atualizado_em = now()
                  WHERE id = :id
                 """)
             .param("id", id)
+            .param("hmac", c.cpfHmac())
             .param("urna", c.nomeUrna())
             .param("nascimento", c.dataNascimento())
             .param("genero", c.genero())
