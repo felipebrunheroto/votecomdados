@@ -64,7 +64,10 @@ public final class Modelo {
         Esfera esfera,
         String siglaTipo,
         Integer numero,
-        int ano,
+        // Nulo quando a peça não tem ano na designação oficial: parecer,
+        // emenda e substitutivo são numerados dentro da tramitação de outra
+        // matéria. A fonte publica 0 nesses casos; ver V14.
+        Integer ano,
         String ementa,
         List<String> temas,
         LocalDate dataApresentacao,
@@ -82,7 +85,10 @@ public final class Modelo {
         Esfera esfera,
         String siglaTipo,
         Integer numero,
-        int ano,
+        // Nulo quando a peça não tem ano na designação oficial: parecer,
+        // emenda e substitutivo são numerados dentro da tramitação de outra
+        // matéria. A fonte publica 0 nesses casos; ver V14.
+        Integer ano,
         String ementa,
         List<String> temas,
         LocalDate dataApresentacao,

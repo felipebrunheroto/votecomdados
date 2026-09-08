@@ -10,7 +10,7 @@
  */
 import Link from "next/link";
 import type { ProposicaoDetalhe } from "@/lib/api/tipos";
-import { formatarData, rotularCasa, rotularEsfera } from "@/lib/formato";
+import { formatarData, rotularCasa, rotularEsfera, designarProposicao } from "@/lib/formato";
 import { LinkFonteOficial } from "./LinkFonteOficial";
 
 export function DetalheDaProposicao({ p }: { p: ProposicaoDetalhe }) {
@@ -24,7 +24,7 @@ export function DetalheDaProposicao({ p }: { p: ProposicaoDetalhe }) {
           {rotularCasa(p.casa)} · {rotularEsfera(p.esfera)}
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-texto">
-          {p.siglaTipo} {p.numero}/{p.ano}
+          {designarProposicao(p)}
         </h1>
         <p className="mt-3 max-w-prose text-texto-suave">{p.ementa}</p>
 

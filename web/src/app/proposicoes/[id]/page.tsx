@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { listarIdsDeProposicoes, obterProposicao } from "@/lib/api/cliente";
 import { DetalheDaProposicao } from "@/componentes/dominio/DetalheDaProposicao";
+import { designarProposicao } from "@/lib/formato";
 
 /** Mesma restrição de export estático da página de perfil — ver FRONTEND.md § 1. */
 export async function generateStaticParams() {
@@ -16,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const p = await obterProposicao(Number(id));
   if (!p) return { title: "Proposição não encontrada" };
   return {
-    title: `${p.siglaTipo} ${p.numero}/${p.ano}`,
+    title: designarProposicao(p),
     description: p.ementa.slice(0, 160),
   };
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Proposicao } from "@/lib/api/tipos";
-import { formatarData, rotularCasa } from "@/lib/formato";
+import { formatarData, rotularCasa, designarProposicao } from "@/lib/formato";
 import { LinkFonteOficial } from "./LinkFonteOficial";
 
 export function ListaProposicoes({ itens }: { itens: Proposicao[] }) {
@@ -16,7 +16,7 @@ export function ListaProposicoes({ itens }: { itens: Proposicao[] }) {
                 href={`/proposicoes/${p.id}`}
                 className="text-texto underline decoration-borda-forte underline-offset-2 hover:decoration-acento"
               >
-                {p.siglaTipo} {p.numero}/{p.ano}
+                {designarProposicao(p)}
               </Link>
             </h3>
             <span className="text-sm text-texto-suave">

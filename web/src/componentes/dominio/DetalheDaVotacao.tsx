@@ -8,7 +8,7 @@
  */
 import Link from "next/link";
 import type { ProposicaoDetalhe, VotacaoDetalhe } from "@/lib/api/tipos";
-import { formatarDataHora, rotularCasa, rotularEsfera } from "@/lib/formato";
+import { formatarDataHora, rotularCasa, rotularEsfera, designarProposicao } from "@/lib/formato";
 import { LinkFonteOficial } from "./LinkFonteOficial";
 import { PlacarVotacao } from "./PlacarVotacao";
 
@@ -83,7 +83,7 @@ export function DetalheDaVotacao({
               href={`/proposicoes/${proposicao.id}`}
               className="font-semibold text-acento underline underline-offset-2 hover:no-underline"
             >
-              {proposicao.siglaTipo} {proposicao.numero}/{proposicao.ano}
+              {designarProposicao(proposicao)}
             </Link>
             <p className="mt-1.5 text-texto-suave">{proposicao.ementa}</p>
           </div>
