@@ -27,7 +27,7 @@
     <java.version>21</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <testcontainers.version>2.0.5</testcontainers.version>
-    <awssdk.version>2.46.7</awssdk.version>
+    <awssdk.version>2.54.13</awssdk.version>
 
     <!--
       Sobrescreve o Tomcat que o Spring Boot 4.1.1 traz (11.0.24), que tem
