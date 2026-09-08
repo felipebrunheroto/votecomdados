@@ -13,6 +13,13 @@ import static br.org.votecomdados.api.repositorio.MapeadoresSql.*;
 @Repository
 public class ProposicaoRepositorio {
 
+    /**
+     * A eleição que o projeto cobre. Mesma constante conceitual de
+     * {@code JobDeCoorte.ANO_DA_COORTE}: o site é sobre quem se apresenta ao
+     * eleitorado em 2026, e o que esse mandato produziu.
+     */
+    private static final int ANO_DA_LEGISLATURA_CORRENTE = 2026;
+
     private final JdbcClient jdbc;
 
     ProposicaoRepositorio(JdbcClient jdbc) {
@@ -85,8 +92,29 @@ public class ProposicaoRepositorio {
             .list();
     }
 
+    /**
+     * Os ids que o site pré-renderiza — {@code generateStaticParams} consome
+     * daqui.
+     *
+     * <p><b>Recorte pela legislatura corrente.</b> Em 08/09/2026 o primeiro
+     * ciclo incremental completo levou a base a 346.481 proposições, e o build
+     * do site estourou a pilha do Next tentando gerar página para cada uma.
+     * Mesmo depois do recorte de coorte na Alesp sobrariam ~209 mil -- contra
+     * 79 mil que já levavam cerca de uma hora.
+     *
+     * <p>O corte NÃO esconde nada: matéria mais antiga continua na API, no
+     * pacote de dados abertos e no site, renderizada no navegador pelo
+     * fallback de {@code not-found.tsx} (o CloudFront reescreve 404 para
+     * {@code /404.html} com status 200). O que ela perde é a página pronta no
+     * HTML -- ou seja, indexação em buscador, não acesso.
+     */
     public List<Long> todosOsIds() {
-        return jdbc.sql("SELECT id FROM proposicao ORDER BY id")
+        return jdbc.sql("""
+                SELECT id FROM proposicao
+                 WHERE ano >= :desde
+                 ORDER BY id
+                """)
+            .param("desde", ANO_DA_LEGISLATURA_CORRENTE)
             .query(Long.class).list();
     }
 

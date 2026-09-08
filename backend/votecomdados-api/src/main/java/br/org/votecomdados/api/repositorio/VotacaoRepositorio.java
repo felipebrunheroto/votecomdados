@@ -13,6 +13,9 @@ import static br.org.votecomdados.api.repositorio.MapeadoresSql.*;
 @Repository
 public class VotacaoRepositorio {
 
+    /** Ver {@code ProposicaoRepositorio.ANO_DA_LEGISLATURA_CORRENTE}. */
+    private static final int ANO_DA_LEGISLATURA_CORRENTE = 2026;
+
     private final JdbcClient jdbc;
 
     VotacaoRepositorio(JdbcClient jdbc) {
@@ -144,7 +147,22 @@ public class VotacaoRepositorio {
             .optional();
     }
 
+    /**
+     * Os ids que o site pré-renderiza. Mesmo recorte de
+     * {@code ProposicaoRepositorio.todosOsIds()}, e pela mesma razão -- aqui
+     * pela data da votação, que é o que a tabela tem.
+     *
+     * <p>Manter os dois recortes juntos importa: uma votação pré-renderizada
+     * linka para a matéria dela. Cortar só um lado encheria o site de página
+     * pronta apontando para página que só existe via fallback.
+     */
     public List<Long> todosOsIds() {
-        return jdbc.sql("SELECT id FROM votacao ORDER BY id").query(Long.class).list();
+        return jdbc.sql("""
+                SELECT id FROM votacao
+                 WHERE data_votacao >= make_date(:desde, 1, 1)
+                 ORDER BY id
+                """)
+            .param("desde", ANO_DA_LEGISLATURA_CORRENTE)
+            .query(Long.class).list();
     }
 }
