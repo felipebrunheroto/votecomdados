@@ -45,9 +45,15 @@ public class BaixadorDeArquivos {
 
     private final HttpClient http;
     private final Duration timeout;
+    private final int tentativas;
+    private final Duration esperaInicial;
 
-    BaixadorDeArquivos(@Value("${votecomdados.download.timeout-segundos:120}") long segundos) {
+    BaixadorDeArquivos(@Value("${votecomdados.download.timeout-segundos:120}") long segundos,
+                       @Value("${votecomdados.download.tentativas:4}") int tentativas,
+                       @Value("${votecomdados.download.espera-inicial-ms:2000}") long esperaMs) {
         this.timeout = Duration.ofSeconds(segundos);
+        this.tentativas = tentativas;
+        this.esperaInicial = Duration.ofMillis(esperaMs);
         this.http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(20))
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -59,6 +65,31 @@ public class BaixadorDeArquivos {
      * @return vazio quando a fonte respondeu 304 — nada mudou, nada a fazer
      */
     public Optional<ArquivoBaixado> baixarSeMudou(URI origem, Path destino, Instant desde) {
+        RuntimeException ultima = null;
+
+        for (int tentativa = 1; tentativa <= tentativas; tentativa++) {
+            try {
+                return umaTentativa(origem, destino, desde);
+            } catch (FalhaTransitoria e) {
+                ultima = e;
+                if (tentativa == tentativas) break;
+                Duration espera = esperaInicial.multipliedBy(1L << (tentativa - 1));
+                log.warn("{}: {} (tentativa {}/{}); nova tentativa em {}s",
+                         nomeDe(origem), e.getMessage(), tentativa, tentativas,
+                         espera.toSeconds());
+                dormir(espera);
+            }
+        }
+
+        // A queixa da ultima tentativa entra na mensagem: sem ela, o log de
+        // producao mostraria so "falhou apos 4 tentativas", e o motivo ficaria
+        // enterrado na cadeia de causas.
+        throw new IllegalStateException(
+            "falha ao baixar " + origem + " apos " + tentativas + " tentativa(s): "
+            + (ultima == null ? "motivo desconhecido" : ultima.getMessage()), ultima);
+    }
+
+    private Optional<ArquivoBaixado> umaTentativa(URI origem, Path destino, Instant desde) {
         var pedido = HttpRequest.newBuilder(origem)
             .timeout(timeout)
             .header("Accept", "*/*");
@@ -79,8 +110,13 @@ public class BaixadorDeArquivos {
                 // O corpo do erro ja foi escrito em disco por ofFile: uma
                 // pagina de 404 com nome de CSV.
                 apagarParcial(destino);
-                throw new IllegalStateException(
-                    "fonte respondeu " + resposta.statusCode() + " para " + origem);
+                String queixa = "fonte respondeu " + resposta.statusCode() + " para " + origem;
+                // 5xx é a fonte mal agora; 4xx é a fonte dizendo que o pedido
+                // está errado, e repeti-lo só perde tempo.
+                if (resposta.statusCode() >= 500) {
+                    throw new FalhaTransitoria(queixa, null);
+                }
+                throw new IllegalStateException(queixa);
             }
 
             Instant modificadoEm = resposta.headers().firstValue("last-modified")
@@ -98,13 +134,27 @@ public class BaixadorDeArquivos {
             // antes da falha fica em disco, com o nome definitivo. A etapa
             // seguinte carregaria esse pedaco como se fosse o arquivo inteiro,
             // e um CSV cortado passa no COPY sem reclamar: so com menos linhas.
-            // O defeito reapareceria muito depois, como dado faltando que
-            // ninguem sabe explicar.
             apagarParcial(destino);
-            throw new IllegalStateException("falha ao baixar " + origem, e);
+            throw new FalhaTransitoria(e.getMessage() == null ? e.toString() : e.getMessage(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("download interrompido: " + origem, e);
+        }
+    }
+
+    private static void dormir(Duration espera) {
+        try {
+            Thread.sleep(espera.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("espera entre tentativas interrompida", e);
+        }
+    }
+
+    /** Falha que vale repetir: rede, timeout, corpo cortado, 5xx. */
+    private static class FalhaTransitoria extends RuntimeException {
+        FalhaTransitoria(String mensagem, Throwable causa) {
+            super(mensagem, causa);
         }
     }
 

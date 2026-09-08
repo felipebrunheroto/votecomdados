@@ -38,7 +38,11 @@ class BaixadorDeArquivosTest {
     private HttpServer servidor;
     private URI origem;
     private final AtomicInteger corposEntregues = new AtomicInteger();
-    private final BaixadorDeArquivos baixador = new BaixadorDeArquivos(30);
+    private final AtomicInteger tentativasInstavel = new AtomicInteger();
+    private final AtomicInteger tentativasSumido = new AtomicInteger();
+    // 3 tentativas com espera de 10ms: exercita a retentativa sem transformar
+    // a suite em espera. Producao usa 4 tentativas comecando em 2s.
+    private final BaixadorDeArquivos baixador = new BaixadorDeArquivos(30, 3, 10);
 
     @BeforeEach
     void subirServidor() throws IOException {
@@ -65,6 +69,28 @@ class BaixadorDeArquivosTest {
         });
         servidor.createContext("/quebrado.csv", troca -> {
             troca.sendResponseHeaders(500, -1);
+            troca.close();
+        });
+        // Some nas duas primeiras tentativas e entrega na terceira: e o
+        // comportamento do portal da Camara observado em 07/09/2026, que
+        // derrubou uma execucao inteira com HttpConnectTimeoutException.
+        servidor.createContext("/instavel.csv", troca -> {
+            int vez = tentativasInstavel.incrementAndGet();
+            if (vez < 3) {
+                troca.sendResponseHeaders(503, -1);
+                troca.close();
+                return;
+            }
+            byte[] corpo = "\"id\";\"valor\"\n\"1\";\"veio\"\n"
+                .getBytes(StandardCharsets.UTF_8);
+            troca.sendResponseHeaders(200, corpo.length);
+            try (var saida = troca.getResponseBody()) {
+                saida.write(corpo);
+            }
+        });
+        servidor.createContext("/sumido.csv", troca -> {
+            tentativasSumido.incrementAndGet();
+            troca.sendResponseHeaders(404, -1);
             troca.close();
         });
         // Anuncia mais do que entrega. O HttpClient rejeita o corpo curto
@@ -157,6 +183,43 @@ class BaixadorDeArquivosTest {
         assertThat(dir.resolve("t.csv"))
             .as("arquivo parcial nao pode ficar para tras: a proxima etapa o carregaria")
             .doesNotExist();
+    }
+
+    /**
+     * O backfill historico sao 125 downloads em sequencia. Sem retentativa, um
+     * soluco de rede em qualquer um deles mata a execucao inteira -- foi o que
+     * aconteceu em 07/09/2026, com HttpConnectTimeoutException.
+     */
+    @Test
+    void fonte_instavel_e_repetida_ate_entregar(@TempDir Path dir) {
+        URI instavel = URI.create("http://127.0.0.1:" + servidor.getAddress().getPort()
+                                  + "/instavel.csv");
+
+        var baixado = baixador.baixarSeMudou(instavel, dir.resolve("i.csv"), null);
+
+        assertThat(baixado).isPresent();
+        assertThat(tentativasInstavel.get())
+            .as("duas recusas antes de entregar")
+            .isEqualTo(3);
+    }
+
+    /**
+     * 404 e a fonte dizendo que o pedido esta errado, nao que ela esta mal
+     * agora. Repetir so gastaria tempo -- e num backfill de 25 anos, gastaria
+     * 25 vezes.
+     */
+    @Test
+    void erro_permanente_nao_e_repetido(@TempDir Path dir) {
+        URI sumido = URI.create("http://127.0.0.1:" + servidor.getAddress().getPort()
+                                + "/sumido.csv");
+
+        assertThatThrownBy(() -> baixador.baixarSeMudou(sumido, dir.resolve("s.csv"), null))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("404");
+
+        assertThat(tentativasSumido.get())
+            .as("4xx e definitivo: uma tentativa so")
+            .isEqualTo(1);
     }
 
     @Test
