@@ -95,11 +95,28 @@ jobs:
             echo "Watermark mudou: '$anterior' -> '$atual'."
           fi
 
+  # SEM `environment: production` -- e a unica publicacao do projeto sem
+  # portao manual, decidido em 08/09/2026.
+  #
+  # A D4 (docs/PLANO_DEVSECOPS_IAC.md) pos clique manual em tudo que publica.
+  # O que a pratica mostrou e que o custo aqui e alto e o risco baixo:
+  #
+  # - O cron dispara de hora em hora e a concorrencia enfileira. Um run parado
+  #   esperando aprovacao trava TODOS os seguintes -- aconteceu com seis horas
+  #   de fila, e o build que interessava nem comecava.
+  # - O que este job faz e sincronizar arquivo estatico num bucket. Nao toca
+  #   banco, nao troca imagem de servico, nao muda infraestrutura. Reverter e
+  #   publicar de novo.
+  #
+  # O portao continua onde o estrago seria real: deploy da API, ingestao e
+  # `terraform apply`.
+  #
+  # A `concurrency` segue `cancel-in-progress: false` de proposito -- cortar um
+  # run no meio do `s3 sync --delete` deixaria o site pela metade.
   publicar:
     needs: decidir
     if: needs.decidir.outputs.reconstruir == 'true'
     runs-on: ubuntu-latest
-    environment: production
     defaults:
       run:
         working-directory: web
