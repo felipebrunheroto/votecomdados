@@ -65,18 +65,35 @@ public class RepositorioDeCoorte {
             }
         }
 
-        var porNome = jdbc.sql("""
-                SELECT id FROM politico
-                 WHERE unaccent_imutavel(upper(nome_civil)) = unaccent_imutavel(upper(:nome))
-                   AND data_nascimento IS NOT DISTINCT FROM :nascimento
-                   AND :nascimento IS NOT NULL
-                """)
-            .param("nome", c.nomeCivil())
-            .param("nascimento", c.dataNascimento())
-            .query(UUID.class).optional();
-        if (porNome.isPresent()) {
-            atualizarDadosPessoais(porNome.get(), c);
-            return porNome.get();
+        // A guarda de nascimento vive no Java, e nao no SQL.
+        //
+        // Antes era `AND :nascimento IS NOT NULL` dentro da consulta, e o
+        // parametro aparecia DUAS vezes. No segundo uso ele nao tem contexto
+        // de tipo -- nada com que o Postgres infira -- e o banco recusava com
+        // "could not determine data type of parameter $3".
+        //
+        // Ninguem tinha visto porque este e o ultimo recurso: so se chega aqui
+        // quando a pessoa nao foi achada nem por candidatura nem por CPF. Com
+        // uma eleicao so, isso nunca acontecia. Derrubou a carga da coorte
+        // multi-ano em 08/09/2026, ao chegar em 2016.
+        //
+        // Sem data de nascimento nao se tenta: nome sozinho nao desempata, e
+        // em mais de um milhao de candidaturas o homonimo e certeza, nao
+        // risco.
+        if (c.dataNascimento() != null) {
+            var porNome = jdbc.sql("""
+                    SELECT id FROM politico
+                     WHERE unaccent_imutavel(upper(nome_civil))
+                           = unaccent_imutavel(upper(:nome))
+                       AND data_nascimento = :nascimento
+                    """)
+                .param("nome", c.nomeCivil())
+                .param("nascimento", c.dataNascimento())
+                .query(UUID.class).optional();
+            if (porNome.isPresent()) {
+                atualizarDadosPessoais(porNome.get(), c);
+                return porNome.get();
+            }
         }
 
         return jdbc.sql("""
