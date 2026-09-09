@@ -46,7 +46,12 @@ permissions:
 
 jobs:
   plan:
-    if: github.event_name == 'pull_request'
+    # `workflow_dispatch` roda o PLAN, nunca o apply. O objetivo dele e
+    # perguntar "a infraestrutura ainda bate com o codigo?" -- pergunta de
+    # leitura. Aplicar fora do fluxo de PR pularia a revisao, que e o que a D4
+    # existe para garantir. Deriva encontrada aqui se corrige por PR, como
+    # qualquer outra mudanca.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -89,7 +94,29 @@ jobs:
             -var="cpf_hmac_pepper=${{ secrets.CPF_HMAC_PEPPER }}"
         continue-on-error: true
 
-      - uses: actions/github-script@v9
+      # O plan tambem vai para o resumo do job: num disparo manual nao existe
+      # PR onde comentar, e o resumo e o unico lugar onde o resultado aparece.
+      - name: publica o plan no resumo
+        if: always()
+        # Por ENV, nao interpolado no script: `${{ }}` e substituido antes de o
+        # shell rodar, e a saida do terraform e texto arbitrario.
+        env:
+          RESULTADO: ${{ steps.plan.outcome }}
+          PLAN: ${{ steps.plan.outputs.stdout }}
+        run: |
+          {
+            echo "#### \`terraform plan\`: \`$RESULTADO\`"
+            echo ""
+            echo '```'
+            printf '%s\n' "$PLAN"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Comentar exige um PR. Num disparo manual `context.issue.number` nao
+      # existe, e o passo estouraria -- foi o que fez a primeira versao do
+      # `workflow_dispatch` nascer decorativa.
+      - if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
         with:
           script: |
             const output = `#### \`terraform plan\`: \`${{ steps.plan.outcome }}\`
