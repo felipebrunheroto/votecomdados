@@ -21,10 +21,23 @@ on:
   workflow_dispatch:
     inputs:
       job:
-        description: "Job de ingestão"
+        description: "Job de ingestão — ignorado quando `curadoria` é preenchido"
         type: choice
         required: true
         options: [BACKFILL, INCREMENTAL, COORTE]
+      curadoria:
+        description: "Curadoria de vinculo por similaridade (nao e ingestao)"
+        type: choice
+        required: false
+        options: ["", listar, aprovar, rejeitar]
+      alvo:
+        description: "Curadoria: SISTEMA:identificador — ex. CAMARA:2319"
+        type: string
+        required: false
+      revisor:
+        description: "Curadoria: quem esta decidindo (obrigatorio em aprovar/rejeitar)"
+        type: string
+        required: false
       fonte:
         description: "Fonte — SEMPRE obrigatória, em todo job"
         type: choice
@@ -73,6 +86,9 @@ jobs:
         # script injections".)
         env:
           JOB: ${{ inputs.job }}
+          CURADORIA: ${{ inputs.curadoria }}
+          ALVO: ${{ inputs.alvo }}
+          REVISOR: ${{ inputs.revisor }}
           FONTE: ${{ inputs.fonte }}
           ANO: ${{ inputs.ano }}
           DESDE: ${{ inputs.desde }}
@@ -90,23 +106,32 @@ jobs:
             --filters "Name=tag:Name,Values=votecomdados-ecs-ingestion" \
             --query 'SecurityGroups[0].GroupId' --output text)
 
-          COMANDO="[\"--job=$JOB\""
-          [ -n "$FONTE" ] && COMANDO="$COMANDO,\"--fonte=$FONTE\""
-          [ -n "$ANO" ]   && COMANDO="$COMANDO,\"--ano=$ANO\""
-          [ -n "$DESDE" ] && COMANDO="$COMANDO,\"--desde=$DESDE\""
-          [ -n "$ATE" ]   && COMANDO="$COMANDO,\"--ate=$ATE\""
+          # Curadoria nao e ingestao: nao le fonte, nao move watermark, nao
+          # abre execucao. Quando pedida, o comando e so ela.
+          if [ -n "$CURADORIA" ]; then
+            COMANDO="[\"--curadoria=$CURADORIA\""
+            [ -n "$ALVO" ]    && COMANDO="$COMANDO,\"--alvo=$ALVO\""
+            [ -n "$REVISOR" ] && COMANDO="$COMANDO,\"--revisor=$REVISOR\""
+            COMANDO="$COMANDO]"
+          else
+            COMANDO="[\"--job=$JOB\""
+            [ -n "$FONTE" ] && COMANDO="$COMANDO,\"--fonte=$FONTE\""
+            [ -n "$ANO" ]   && COMANDO="$COMANDO,\"--ano=$ANO\""
+            [ -n "$DESDE" ] && COMANDO="$COMANDO,\"--desde=$DESDE\""
+            [ -n "$ATE" ]   && COMANDO="$COMANDO,\"--ate=$ATE\""
 
-          # Um --arquivo por pacote. A trajetoria eleitoral so se forma se as
-          # eleicoes anteriores entrarem na MESMA execucao que a de 2026: o
-          # cpf_hmac e quem costura a mesma pessoa entre pleitos, e ele e
-          # expurgado ao fim do job.
-          if [ -n "$PACOTES" ]; then
-            read -ra lista <<< "$PACOTES"
-            for pacote in "${lista[@]}"; do
-              COMANDO="$COMANDO,\"--arquivo=$pacote\""
-            done
+            # Um --arquivo por pacote. A trajetoria eleitoral so se forma se as
+            # eleicoes anteriores entrarem na MESMA execucao que a de 2026: o
+            # cpf_hmac e quem costura a mesma pessoa entre pleitos, e ele e
+            # expurgado ao fim do job.
+            if [ -n "$PACOTES" ]; then
+              read -ra lista <<< "$PACOTES"
+              for pacote in "${lista[@]}"; do
+                COMANDO="$COMANDO,\"--arquivo=$pacote\""
+              done
+            fi
+            COMANDO="$COMANDO]"
           fi
-          COMANDO="$COMANDO]"
 
           echo "Disparando: $COMANDO"
           echo "Subnets: $SUBNETS | SG: $SG"
