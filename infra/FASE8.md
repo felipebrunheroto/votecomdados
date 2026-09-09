@@ -6,11 +6,32 @@ existe** — e o mesmo vale para backup nunca restaurado.
 
 | item | como se verifica | estado |
 |---|---|---|
-| 1. Alarme de billing dispara | workflow **Verificar guardrails** | automatizado |
+| 1. Alarme de billing dispara | workflow **Verificar guardrails** | automatizado — **reprovou em 09/09/2026**, ver abaixo |
 | 2. Restore do backup funciona | runbook abaixo, manual | manual, ~40 min |
 | 3. Rate limit do WAF bloqueia | ver § 3 | ✅ verificado em 08/09/2026 |
 
 ---
+
+## 0. O que a primeira execução encontrou (09/09/2026)
+
+`assinaturas confirmadas: 0 | pendentes: 0` — o tópico SNS existia e **não
+tinha assinatura nenhuma**. Todos os alarmes do projeto estavam mudos:
+disparariam sem avisar ninguém.
+
+O que torna isso instrutivo: o `terraform plan` de 15 horas antes tinha
+refrescado essa mesma assinatura com ARN real e reportado *"No changes"*.
+Entre um e outro, ela sumiu — e vários alarmes de falha de ingestão haviam
+disparado nesse intervalo, cada um mandando e-mail com um link de
+_unsubscribe_ no rodapé.
+
+**Assinatura de e-mail do SNS não é protegida pelo Terraform.** Qualquer
+pessoa que receba um alarme pode cancelá-la com um clique, e o código
+continua dizendo que ela existe. É exatamente o tipo de divergência que
+"estar no código" não garante, e por isso esta verificação roda toda segunda.
+
+Para restaurar: `terraform apply` recria a assinatura, e é preciso **clicar no
+link de confirmação** que a AWS manda para o e-mail de billing. Depois, rode
+o workflow de novo e confirme `confirmadas: 1`.
 
 ## 1. Alarme de billing
 

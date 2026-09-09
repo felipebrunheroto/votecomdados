@@ -25,6 +25,16 @@ on:
   push:
     branches: [main]
     paths: ["infra/**"]
+  # Sem isto, a unica forma de perguntar "a infraestrutura ainda bate com o
+  # codigo?" era empurrar uma mudanca em `infra/**`. Em 09/09/2026 a
+  # assinatura de e-mail do SNS sumiu da conta -- o plan de 15 horas antes a
+  # tinha refrescado com ARN real e dito "No changes" -- e nao havia como
+  # conferir a divergencia sem inventar um commit.
+  #
+  # Deriva de infraestrutura acontece fora do nosso controle: alguem clica
+  # "unsubscribe" num e-mail de alarme, um recurso expira, alguem mexe no
+  # console. Poder perguntar sob demanda e o minimo.
+  workflow_dispatch:
 
 concurrency:
   group: terraform-${{ github.ref }}
