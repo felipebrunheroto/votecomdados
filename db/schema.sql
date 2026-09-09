@@ -222,6 +222,12 @@ CREATE TABLE politico (
 );
 
 CREATE UNIQUE INDEX idx_politico_cpf_hmac ON politico (cpf_hmac) WHERE cpf_hmac IS NOT NULL;
+-- Igualdade por nome + nascimento: é o último recurso da resolução de
+-- identidade, e o único caminho para quem não casa por candidatura nem por
+-- CPF. O índice de trigrama abaixo NÃO serve aqui: é outra expressão (sem
+-- `upper`) e outro operador (similaridade, não igualdade). Sem este índice a
+-- carga multi-ano vira varredura sequencial por linha — ver V15.
+CREATE INDEX idx_politico_nome_civil_nascimento ON politico (unaccent_imutavel(upper(nome_civil)), data_nascimento);
 CREATE INDEX idx_politico_nome_civil_trgm ON politico USING gin (unaccent_imutavel(nome_civil) gin_trgm_ops);
 CREATE INDEX idx_politico_nome_urna_trgm ON politico USING gin (unaccent_imutavel(nome_urna) gin_trgm_ops);
 CREATE INDEX idx_politico_busca ON politico USING gin (nome_busca);
