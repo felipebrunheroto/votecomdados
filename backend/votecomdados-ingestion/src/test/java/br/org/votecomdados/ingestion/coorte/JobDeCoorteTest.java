@@ -81,12 +81,14 @@ class JobDeCoorteTest {
      */
     @Test
     void mesma_pessoa_em_eleicoes_diferentes_vira_uma_trajetoria() {
+        // O ano da coorte vem PRIMEIRO, como o SeletorDeJob ordena em
+        // producao: e ele que cria a pessoa. Anos anteriores so anexam.
         job.carregarAno(execucao, linhas(
+            candidatura("900000000003", 2026, "3", "SP", "MARIA DA SILVA SOUZA",
+                        "MARIA SILVA", "11122233344"),
             candidatura("900000000001", 2016, "13", "SP", "MARIA DA SILVA SOUZA",
                         "MARIA SILVA", "11122233344"),
             candidatura("900000000002", 2022, "6", "SP", "MARIA DA SILVA SOUZA",
-                        "MARIA SILVA", "11122233344"),
-            candidatura("900000000003", 2026, "3", "SP", "MARIA DA SILVA SOUZA",
                         "MARIA SILVA", "11122233344")));
 
         assertThat(contar("politico")).as("um CPF, uma pessoa").isEqualTo(1);
@@ -111,11 +113,13 @@ class JobDeCoorteTest {
      */
     @Test
     void arquivos_separados_na_mesma_execucao_costuram_a_mesma_pessoa() {
-        job.carregarAno(execucao, linhas(
-            candidatura("900000000011", 2022, "6", "SP", "JOAO PEREIRA LIMA",
-                        "JOAO LIMA", "55566677788")));
+        // Pacote do ano da coorte primeiro, depois o anterior — a ordem que o
+        // SeletorDeJob garante.
         job.carregarAno(execucao, linhas(
             candidatura("900000000012", 2026, "6", "SP", "JOAO PEREIRA LIMA",
+                        "JOAO LIMA", "55566677788")));
+        job.carregarAno(execucao, linhas(
+            candidatura("900000000011", 2022, "6", "SP", "JOAO PEREIRA LIMA",
                         "JOAO LIMA", "55566677788")));
 
         job.encerrar();
@@ -186,19 +190,53 @@ class JobDeCoorteTest {
             candidatura("900000000041", 2026, "6", "SP", "PESSOA DA COORTE",
                         "PESSOA COORTE", "11111111111")));
 
-        // Alguém de outra eleição, que não está na base, cujo CPF não casa
-        // com ninguém E SEM DATA DE NASCIMENTO. Os três juntos são o gatilho:
-        // sem data, o parâmetro vai como NULL sem tipo, e era aí que o
-        // Postgres desistia de inferir.
+        // Desconhecido, CPF que nao casa com ninguem, E SEM DATA DE
+        // NASCIMENTO. Os tres juntos eram o gatilho: sem data, o parametro ia
+        // como NULL sem tipo, e o Postgres desistia de inferir.
+        //
+        // No ANO DA COORTE, porque e ali que o caminho e alcancavel — em ano
+        // anterior a linha e ignorada antes de chegar ao banco.
         assertThatCode(() -> job.carregarAno(execucao, linhas(
-            semNascimento(candidatura("900000000042", 2016, "11", "SP",
-                                      "DESCONHECIDO DE 2016", "DESCONHECIDO",
+            semNascimento(candidatura("900000000042", 2026, "11", "SP",
+                                      "DESCONHECIDO SEM DATA", "DESCONHECIDO",
                                       "22222222222")))))
             .doesNotThrowAnyException();
 
         assertThat(contar("politico"))
-            .as("os dois entram; a poda e que decide depois quem fica")
+            .as("os dois sao candidatos em 2026, entao os dois entram")
             .isEqualTo(2);
+    }
+
+    /**
+     * A economia que essa regra compra, medida no comportamento e não na
+     * intenção: nenhuma escrita acontece para quem não é da coorte.
+     *
+     * <p>Era isso que fazia a carga municipal levar horas — ~450 mil linhas,
+     * quase todas de gente fora de 2026, cada uma custando criação de pessoa,
+     * gravação de candidatura e payload no staging, para serem apagadas pela
+     * poda minutos depois.
+     */
+    @Test
+    void ano_anterior_sem_dono_nao_escreve_nada() {
+        job.carregarAno(execucao, linhas(
+            candidatura("900000000051", 2026, "6", "SP", "QUEM ESTA NA COORTE",
+                        "NA COORTE", "44455566677")));
+
+        long stagingAntes = jdbc.sql("SELECT count(*) FROM staging.payload_bruto")
+            .query(Long.class).single();
+
+        var r = job.carregarAno(execucao, linhas(
+            candidatura("900000000052", 2016, "11", "SP", "GENTE DE OUTRA ELEICAO",
+                        "OUTRA", "77788899900")));
+
+        assertThat(r.processados()).as("nada processado").isZero();
+        assertThat(r.rejeitados()).as("nao e rejeicao: o dado nao tem defeito").isZero();
+        assertThat(contar("politico")).isEqualTo(1);
+        assertThat(contar("candidatura")).isEqualTo(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM staging.payload_bruto")
+            .query(Long.class).single())
+            .as("nem o payload com dado pessoal de quem esta fora do escopo")
+            .isEqualTo(stagingAntes);
     }
 
     /**
@@ -218,8 +256,8 @@ class JobDeCoorteTest {
             .hasMessageContaining("MESMA execucao");
 
         assertThat(contar("politico"))
-            .as("nada foi apagado")
-            .isEqualTo(1);
+            .as("candidatura de ano anterior sem dono na coorte nem chega a criar pessoa")
+            .isZero();
     }
 
     @Test
@@ -236,11 +274,22 @@ class JobDeCoorteTest {
     @Test
     void quem_nao_e_candidato_em_2026_e_podado_com_todo_o_historico() {
         job.carregarAno(execucao, linhas(
-            candidatura("900000000010", 2022, "6", "SP", "FULANO QUE SAIU",
-                        "FULANO", "22233344455"),
             candidatura("900000000011", 2026, "6", "SP", "BELTRANA QUE FICOU",
-                        "BELTRANA", "33344455566")));
+                        "BELTRANA", "33344455566"),
+            candidatura("900000000010", 2022, "6", "SP", "FULANO QUE SAIU",
+                        "FULANO", "22233344455")));
 
+        assertThat(contar("politico"))
+            .as("FULANO nem entra: 2022 so anexa a quem ja esta na base")
+            .isEqualTo(1);
+
+        // A poda continua necessaria para o que ficou de execucoes ANTIGAS,
+        // gravado antes desta regra existir — como a base de producao, que
+        // recebeu candidaturas de 2014 pelo caminho antigo.
+        jdbc.sql("""
+            INSERT INTO politico (nome_civil, data_nascimento)
+            VALUES ('HERANCA DE CARGA ANTIGA', DATE '1960-05-05')
+            """).update();
         assertThat(contar("politico")).isEqualTo(2);
 
         job.encerrar();

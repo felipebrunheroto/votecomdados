@@ -6,6 +6,7 @@ import br.org.votecomdados.ingestion.execucao.Execucao;
 import br.org.votecomdados.ingestion.staging.RepositorioDePayloadBruto;
 import br.org.votecomdados.ingestion.staging.ServicoDeQuarentena;
 import java.util.Iterator;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -64,10 +65,10 @@ public class JobDeCoorte {
     public Resultado carregarAno(Execucao execucao, Iterator<JsonNode> linhas) {
         int processados = 0;
         int rejeitados = 0;
+        int foraDaCoorte = 0;
 
         while (linhas.hasNext()) {
             JsonNode linha = linhas.next();
-            staging.gravar(execucao, "candidatura", idExterno(linha), linha);
 
             var candidatura = leitor.ler(linha);
             if (candidatura.isEmpty()) {
@@ -82,9 +83,39 @@ public class JobDeCoorte {
             }
 
             var c = candidatura.get();
-            var politicoId = repositorio.encontrarOuCriar(c);
+
+            // Em eleição ANTERIOR, a candidatura só se anexa a quem já está na
+            // base — nunca cria pessoa.
+            //
+            // Quem aparece num pacote de 2016 e não está aqui não é candidato
+            // em 2026, e o `encerrar` o apagaria minutos depois. Criar para
+            // apagar custava ~6 escritas por linha em pacotes de 450 mil, e
+            // fazia a carga municipal levar horas (08/09/2026). Também
+            // guardava no staging o payload com dado pessoal de gente fora do
+            // escopo do projeto — o oposto da minimização do § 10.
+            //
+            // Funciona porque o pacote do ano da coorte entra PRIMEIRO: quem é
+            // da coorte já está na base quando os anos anteriores chegam.
+            UUID politicoId;
+            if (c.anoEleicao() == ANO_DA_COORTE) {
+                politicoId = repositorio.encontrarOuCriar(c);
+            } else {
+                var existente = repositorio.encontrar(c);
+                if (existente.isEmpty()) {
+                    foraDaCoorte++;
+                    continue;
+                }
+                politicoId = existente.get();
+            }
+
+            staging.gravar(execucao, "candidatura", idExterno(linha), linha);
             repositorio.gravarCandidatura(politicoId, c);
             processados++;
+        }
+
+        if (foraDaCoorte > 0) {
+            log.info("{} candidatura(s) de eleicao anterior ignorada(s): a pessoa "
+                     + "nao e candidata em {}", foraDaCoorte, ANO_DA_COORTE);
         }
 
         return new Resultado(processados, rejeitados);
