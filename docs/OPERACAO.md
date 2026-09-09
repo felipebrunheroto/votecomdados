@@ -142,6 +142,76 @@ candidato em 2026.
 
 ---
 
+## 3.1 Curadoria dos vínculos por similaridade
+
+Quando o cadastro não acha a pessoa por id nem por nome + nascimento, ele casa
+por **similaridade de nome** (limiar 0,85). Esses vínculos entram valendo, mas
+marcados `FUZZY` e não revisados.
+
+Isto não é higiene de dado: um vínculo errado **atribui voto e autoria de uma
+pessoa a outra**, que é o pior erro que a plataforma pode cometer.
+
+### Ver a fila
+
+```
+Actions → Rodar ingestão → curadoria = listar
+```
+
+Sai no log, do menos confiável para o mais:
+
+```
+score=0.8519 CAMARA:2319 LUCIANE PEREIRA DA SILVA (urna: LUCY DA SILVA)
+```
+
+O `job` e a `fonte` do formulário são ignorados quando `curadoria` está
+preenchido — curadoria não é ingestão: não lê fonte, não move watermark e não
+abre execução.
+
+### Decidir
+
+```
+curadoria = aprovar   |  alvo = CAMARA:2319  |  revisor = <seu nome>
+curadoria = rejeitar  |  alvo = CAMARA:2319  |  revisor = <seu nome>
+```
+
+**Rejeitar apaga o vínculo**, não o marca como "revisado e errado" — deixá-lo
+manteria o dado errado em produção. A pessoa fica; o errado era o vínculo.
+
+A ingestão seguinte vai tentar resolver aquele identificador de novo. Se cair
+na mesma similaridade, **volta para esta fila** — a decisão não vira regra
+automática, porque quem decide é gente.
+
+O `revisor` é obrigatório porque o schema exige: a restrição
+`revisao_auditavel` impede marcar revisado sem dizer quem e quando. Com curador
+único isso importa mais, não menos — é o que separa curadoria auditável de
+UPDATE manual em produção.
+
+Alvo inexistente, já revisado ou determinístico **falha** em vez de reportar
+sucesso: é preciso saber que não se aprovou nada.
+
+### O tamanho real da fila
+
+Em 09/09/2026 eram 128 vínculos por similaridade, mas o número engana:
+
+| | |
+|---|---|
+| score 1,0 — nome idêntico | 114 |
+| **abaixo de 1,0 — exigem julgamento** | **14** |
+
+Os 114 entraram como fuzzy só porque a fonte não publica data de nascimento.
+Nos 14 restantes o padrão é nome de urna apelidado (`LUCY DA SILVA` para
+`LUCIANE PEREIRA DA SILVA`).
+
+Para reproduzir essa contagem sem acesso ao banco, o pacote de dados abertos
+basta:
+
+```bash
+curl -fsS https://votecomdados.com.br/dados-abertos/AAAA-MM-DD/identificador_externo.csv \
+  | awk -F, 'NR>1 && $4=="FUZZY" && $5+0 < 0.9999'
+```
+
+---
+
 ## 4. Subir pacote do TSE
 
 O CDN do TSE recusa requisição fora de navegador (403), então o download é
