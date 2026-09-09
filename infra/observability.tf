@@ -7,6 +7,21 @@ resource "aws_sns_topic" "alarmes" {
   kms_master_key_id = "alias/aws/sns" # chave gerenciada pela AWS — sem custo adicional, ao contrário de uma CMK própria
 }
 
+# ATENCAO OPERACIONAL: assinatura de e-mail e fragil de um jeito que o
+# Terraform nao protege.
+#
+# Ela exige confirmacao manual (a AWS manda um link), e QUALQUER pessoa que
+# receba um alarme pode cancelar clicando "unsubscribe" no rodape da
+# mensagem. O Terraform so percebe no proximo plan; ate la, todo alarme deste
+# projeto e mudo -- dispara e nao avisa ninguem.
+#
+# Aconteceu em 09/09/2026: o plan das 21:52 do dia anterior refrescou esta
+# assinatura com ARN real e reportou "No changes"; 15 horas depois o topico
+# nao tinha assinatura nenhuma. Varios alarmes de falha de ingestao haviam
+# disparado nesse intervalo.
+#
+# Por isso o workflow "Verificar guardrails" checa isto toda segunda, em vez
+# de confiar em que estar no codigo signifique estar no ar.
 resource "aws_sns_topic_subscription" "alarmes_email" {
   topic_arn = aws_sns_topic.alarmes.arn
   protocol  = "email"
