@@ -10,6 +10,7 @@ import br.org.votecomdados.ingestion.coorte.LeitorDeArquivoTse;
 import br.org.votecomdados.ingestion.download.JobIncremental;
 import br.org.votecomdados.ingestion.execucao.ControleDeExecucaoService;
 import br.org.votecomdados.ingestion.execucao.Execucao;
+import br.org.votecomdados.ingestion.identidade.CuradoriaDeVinculos;
 import br.org.votecomdados.ingestion.execucao.ExecucaoConcorrenteException;
 import br.org.votecomdados.ingestion.massa.JobDeBackfill;
 import br.org.votecomdados.ingestion.publicacao.ExportadorDeDadosAbertos;
@@ -61,13 +62,15 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
     private final JobDeBackfill backfillCamara;
     private final ExportadorDeDadosAbertos exportador;
     private final ArmazenamentoDeObjetos armazenamento;
+    private final CuradoriaDeVinculos curadoria;
     private int codigoDeSaida = 0;
 
     SeletorDeJob(ControleDeExecucaoService controle, JobDeCoorte coorte,
                  LeitorDeArquivoTse leitorTse, JobIncremental incremental,
                  OrquestradorDaAlesp alesp, OrquestradorDoSenado senado,
                  JobDeBackfill backfillCamara, ExportadorDeDadosAbertos exportador,
-                 ArmazenamentoDeObjetos armazenamento) {
+                 ArmazenamentoDeObjetos armazenamento,
+                 CuradoriaDeVinculos curadoria) {
         this.controle = controle;
         this.coorte = coorte;
         this.leitorTse = leitorTse;
@@ -77,10 +80,18 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
         this.backfillCamara = backfillCamara;
         this.exportador = exportador;
         this.armazenamento = armazenamento;
+        this.curadoria = curadoria;
     }
 
     @Override
     public void run(ApplicationArguments args) {
+        // Curadoria entra ANTES do despacho de job: nao le fonte, nao move
+        // watermark e nao abre execucao. Ver CuradoriaDeVinculos.
+        if (args.containsOption("curadoria")) {
+            executarCuradoria(args);
+            return;
+        }
+
         TipoJob job;
         Fonte fonte;
         try {
@@ -333,6 +344,62 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
      * este desvio não havia como entregá-lo a um container Fargate, e a
      * coorte simplesmente não rodava em produção.
      */
+    /**
+     * {@code --curadoria=listar|aprovar|rejeitar}, com
+     * {@code --alvo=SISTEMA:identificador} e {@code --revisor=<quem>}.
+     *
+     * <p>O revisor e obrigatorio em aprovar e rejeitar porque o schema exige:
+     * a restricao `revisao_auditavel` impede marcar revisado sem dizer quem e
+     * quando. Curador unico torna isso mais importante, nao menos -- e o que
+     * separa curadoria auditavel de UPDATE manual em producao.
+     */
+    private void executarCuradoria(ApplicationArguments args) {
+        String acao = umValor(args, "curadoria");
+
+        if ("listar".equals(acao)) {
+            var pendentes = curadoria.pendentes();
+            log.info("{} vinculo(s) por similaridade aguardando decisao", pendentes.size());
+            for (var p : pendentes) {
+                log.info("  score={} {}:{} {} (urna: {})",
+                         p.score(), p.sistema(), p.identificador(), p.nomeCivil(), p.nomeUrna());
+            }
+            return;
+        }
+
+        if (!"aprovar".equals(acao) && !"rejeitar".equals(acao)) {
+            log.error("--curadoria aceita listar, aprovar ou rejeitar; veio '{}'", acao);
+            codigoDeSaida = SAIDA_FALHA;
+            return;
+        }
+
+        String alvo = umValor(args, "alvo");
+        String revisor = umValor(args, "revisor");
+        if (alvo == null || revisor == null || !alvo.contains(":")) {
+            log.error("aprovar/rejeitar exigem --alvo=SISTEMA:identificador e --revisor=<quem>");
+            codigoDeSaida = SAIDA_FALHA;
+            return;
+        }
+
+        String sistema = alvo.substring(0, alvo.indexOf(':'));
+        String identificador = alvo.substring(alvo.indexOf(':') + 1);
+
+        boolean mexeu = "aprovar".equals(acao)
+            ? curadoria.aprovar(sistema, identificador, revisor)
+            : curadoria.rejeitar(sistema, identificador, revisor);
+
+        if (!mexeu) {
+            // Nao e sucesso silencioso: o operador precisa saber que o alvo
+            // nao existia, ja fora revisado, ou nao era fuzzy.
+            log.error("nenhum vinculo pendente por similaridade em {}:{}", sistema, identificador);
+            codigoDeSaida = SAIDA_FALHA;
+        }
+    }
+
+    private static String umValor(ApplicationArguments args, String nome) {
+        var valores = args.getOptionValues(nome);
+        return (valores == null || valores.isEmpty()) ? null : valores.getFirst();
+    }
+
     private static boolean ehZip(Path arquivo) {
         return arquivo.toString().toLowerCase(Locale.ROOT).endsWith(".zip");
     }
