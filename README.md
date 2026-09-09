@@ -40,6 +40,9 @@ provavelmente nunca será viável.
 
 ## Documentação
 
+- [docs/OPERACAO.md](docs/OPERACAO.md) — **para operar**: em que ordem rodar a
+  carga, o que cada linha de log significa, os números de referência, e o que
+  fazer quando falha. Escrito a partir do que foi observado rodando.
 - [docs/ARQUITETURA.md](docs/ARQUITETURA.md) — **começar por aqui**:
   diagramas C4 (contexto, containers e componentes) em Mermaid, pipeline de
   ingestão, resolução de identidades, decisões de arquitetura e limitações.
