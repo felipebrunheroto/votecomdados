@@ -1,5 +1,6 @@
 package br.org.votecomdados.ingestion.coorte;
 
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -44,25 +45,27 @@ public class RepositorioDeCoorte {
      * criando duplicatas ou fragmentando trajetórias <i>em silêncio</i>. O
      * {@code sq_candidato_tse} não é apagado, e por isso vem primeiro.
      */
-    public UUID encontrarOuCriar(CandidaturaDoTse c) {
+    /**
+     * Acha a pessoa, sem criar e sem atualizar nada.
+     *
+     * <p>É o que os anos ANTERIORES usam: neles a candidatura só se anexa a
+     * quem já está na base. Não atualizar é parte do contrato — o pacote do
+     * ano da coorte entra primeiro, e deixar 2014 sobrescrever nome de urna
+     * ou gênero faria o perfil exibir o dado mais VELHO.
+     */
+    public Optional<UUID> encontrar(CandidaturaDoTse c) {
         var porCandidatura = jdbc.sql("""
                 SELECT politico_id FROM candidatura
                  WHERE sq_candidato_tse = :sq AND ano_eleicao = :ano
                 """)
             .param("sq", c.sqCandidato()).param("ano", c.anoEleicao())
             .query(UUID.class).optional();
-        if (porCandidatura.isPresent()) {
-            atualizarDadosPessoais(porCandidatura.get(), c);
-            return porCandidatura.get();
-        }
+        if (porCandidatura.isPresent()) return porCandidatura;
 
         if (c.cpfHmac() != null) {
             var porHmac = jdbc.sql("SELECT id FROM politico WHERE cpf_hmac = :hmac")
                 .param("hmac", c.cpfHmac()).query(UUID.class).optional();
-            if (porHmac.isPresent()) {
-                atualizarDadosPessoais(porHmac.get(), c);
-                return porHmac.get();
-            }
+            if (porHmac.isPresent()) return porHmac;
         }
 
         // A guarda de nascimento vive no Java, e nao no SQL.
@@ -90,10 +93,18 @@ public class RepositorioDeCoorte {
                 .param("nome", c.nomeCivil())
                 .param("nascimento", c.dataNascimento())
                 .query(UUID.class).optional();
-            if (porNome.isPresent()) {
-                atualizarDadosPessoais(porNome.get(), c);
-                return porNome.get();
-            }
+            if (porNome.isPresent()) return porNome;
+        }
+
+        return Optional.empty();
+    }
+
+    /** Acha, atualiza o que a fonte trouxer de novo, e cria se nao existir. */
+    public UUID encontrarOuCriar(CandidaturaDoTse c) {
+        var achado = encontrar(c);
+        if (achado.isPresent()) {
+            atualizarDadosPessoais(achado.get(), c);
+            return achado.get();
         }
 
         return jdbc.sql("""
