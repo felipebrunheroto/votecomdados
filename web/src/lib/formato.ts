@@ -102,6 +102,25 @@ export function rotularStatusCandidatura(status: string): string {
   return ROTULO_STATUS[status] ?? status;
 }
 
+/**
+ * O TSE só julga o registro depois do prazo de inscrição. Até lá publica
+ * `#NE` em `DS_SITUACAO_CANDIDATURA`, que a ingestão guarda como
+ * `NAO_INFORMADO` — em 09/09/2026 isso era 100% das candidaturas de 2026.
+ *
+ * <p>Tratar "ainda não julgado" como adverso fazia a plataforma avisar, em
+ * TODO perfil, que "o registro desta candidatura não está deferido" — uma
+ * afirmação de irregularidade sobre 20.809 pessoas que apenas aguardam
+ * decisão. O oposto do que um site de transparência deve fazer.
+ *
+ * <p>Adverso é o que a fonte AFIRMOU ser adverso. Ausência de decisão não é
+ * decisão.
+ */
+const STATUS_ADVERSOS = new Set(["INDEFERIDO", "CASSADO", "RENUNCIA", "INAPTO"]);
+
+export function registroEmSituacaoAdversa(status: string): boolean {
+  return STATUS_ADVERSOS.has(status);
+}
+
 const ROTULO_CASA: Record<string, string> = {
   CAMARA: "Câmara dos Deputados",
   SENADO: "Senado Federal",

@@ -23,6 +23,17 @@ export function TrajetoriaPolitica({ trajetoria }: { trajetoria: Candidatura[] }
         {trajetoria.map((c, i) => {
           const eleito = c.eleito === true;
           const emDisputa = c.eleito === null;
+          // O TSE publica `#NE` em DS_SITUACAO_CANDIDATURA enquanto o registro
+          // está sendo julgado — em 09/09/2026, 100% das candidaturas de 2026.
+          // A ingestão guarda isso como NAO_INFORMADO em vez de presumir
+          // "apto", porque afirmar deferimento em nome do TSE seria inventar
+          // fato sobre pessoa real (ver LeitorDeCandidaturasTse).
+          //
+          // Na tela, "NAO_INFORMADO" não informa nada a quem vota: some até a
+          // fonte decidir. É condicional ao valor, não uma remoção — quando o
+          // TSE julgar, o rótulo volta sozinho, sem ninguém lembrar de
+          // reverter isto.
+          const statusJulgado = c.status !== "NAO_INFORMADO";
           return (
             <li
               key={`${c.anoEleicao}-${c.cargo}-${c.uf}-${i}`}
@@ -58,11 +69,13 @@ export function TrajetoriaPolitica({ trajetoria }: { trajetoria: Candidatura[] }
                     {rotularEsfera(c.esfera)}
                   </span>{" "}
                   {emDisputa
-                    ? rotularStatusCandidatura(c.status)
+                    ? statusJulgado
+                      ? rotularStatusCandidatura(c.status)
+                      : ""
                     : eleito
                       ? "Eleito"
                       : "Não eleito"}
-                  {!emDisputa && c.status !== "DEFERIDO"
+                  {!emDisputa && statusJulgado && c.status !== "DEFERIDO"
                     ? ` · ${rotularStatusCandidatura(c.status)}`
                     : ""}
                 </p>

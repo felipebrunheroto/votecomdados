@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { PoliticoResumo } from "@/lib/api/tipos";
-import { rotularCargo, rotularStatusCandidatura } from "@/lib/formato";
+import { rotularCargo, rotularStatusCandidatura, registroEmSituacaoAdversa } from "@/lib/formato";
 
 /**
  * Iniciais no lugar da foto — e não é fallback, é a única forma.
@@ -23,7 +23,7 @@ function Iniciais({ nome }: { nome: string }) {
 
 export function CartaoCandidato({ politico }: { politico: PoliticoResumo }) {
   const nomeExibido = politico.nomeUrna ?? politico.nomeCivil;
-  const registroIrregular = politico.statusCandidatura !== "DEFERIDO";
+  const registroIrregular = registroEmSituacaoAdversa(politico.statusCandidatura);
 
   return (
     <li>
