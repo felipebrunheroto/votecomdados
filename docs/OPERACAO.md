@@ -273,6 +273,37 @@ Enquanto vier só `NAO_INFORMADO`, o TSE ainda não julgou.
 
 ---
 
+## 4.2 Quantas pessoas visitam o site
+
+O workflow **Verificar guardrails** publica, junto da checagem semanal, as
+requisições do CloudFront por dia nos últimos 7 dias.
+
+**Requisição não é visita.** Uma página estática carrega o HTML mais vários
+chunks de JS e fontes, então o número infla — algo entre 10 e 20 requisições
+por página vista, dependendo do cache do navegador. Serve para responder "o
+tráfego cresceu?", não "quantas pessoas vieram".
+
+Isso importa além da curiosidade: `ARQUITETURA.md` e `CUSTOS_INFRA_AWS.md`
+assumem **~1.000 visitas/dia** em decisões concretas — o Redis foi removido
+porque ficaria frio nessa escala, o cache de cinco minutos foi dimensionado
+assim, e o porte do RDS idem. A premissa nunca foi medida.
+
+### Se um dia precisar de página por página
+
+O log padrão do CloudFront (`logging_config` em `infra/edge.tf`, hoje
+desligado) grava cada requisição em S3. Em dinheiro é irrisório na escala
+prevista: ~450 mil requisições/mês a poucas centenas de bytes por linha
+comprimida dá dezenas de megabytes, ou **centavos por mês** de S3.
+
+O custo real é outro: **log de acesso do CloudFront contém o IP do
+visitante.** Numa plataforma que se define por minimizar dado pessoal — que
+expurga CPF ao fim de cada coorte e recusou publicar foto de candidato —,
+passar a guardar IP de quem consulta perfis de políticos é uma decisão de
+princípio, não de orçamento. Se for ligado, ligue junto uma regra de expiração
+curta no bucket.
+
+---
+
 ## 5. Quando falha
 
 | sintoma | o que é | o que fazer |
