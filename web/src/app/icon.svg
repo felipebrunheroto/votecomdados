@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img"
+     aria-label="VoteComDados">
+  <!--
+    Balança graduada: a viga é uma régua sobre o apoio.
+
+    A escolha é de conteúdo, não só de forma. O rodapé do site afirma que "a
+    plataforma não classifica nem ranqueia candidatos", e a balança da Justiça
+    carrega leitura de veredito. Aqui a viga MEDE em vez de julgar — não há
+    pratos, não há lado que desce.
+
+    Sem contorno fino e sem arco de propósito: favicon vive a 16 pixels, onde
+    traço fino e curva pequena viram borrão. Sobram cinco linhas retas e um
+    triângulo sólido.
+
+    A cor acompanha o tema do NAVEGADOR, não o do site: a aba tem fundo
+    próprio, e o petróleo sólido sumiria numa aba escura. Os dois valores são
+    os mesmos valores de acento de globals.css.
+  -->
+  <style>
+    :root { color: #1c5d73; }
+    @media (prefers-color-scheme: dark) {
+      :root { color: #7cc4dc; }
+    }
+  </style>
+  <g fill="none" stroke="currentColor" stroke-width="1.8"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 9h18"/>
+    <path d="M6 9v2.6"/>
+    <path d="M9 9v2.6"/>
+    <path d="M15 9v2.6"/>
+    <path d="M18 9v2.6"/>
+  </g>
+  <path d="M12 9 8.5 19h7Z" fill="currentColor"/>
+</svg>
