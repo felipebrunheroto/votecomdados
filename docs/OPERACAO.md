@@ -229,7 +229,47 @@ Três detalhes que não são cosméticos:
 3. **Manter a extensão `.zip`** — o leitor escolhe zip ou csv pela extensão.
 
 Conferir depois de subir: a ETag do S3, quando não tem sufixo `-N`, é o MD5 do
-arquivo. `md5 -q arquivo.zip` deve bater.
+arquivo. `md5 -q arquivo.zip` deve bater. Upload truncado passaria
+despercebido até o COORTE falhar de madrugada.
+
+### 4.1 Reenviar o pacote de 2026 durante o período eleitoral
+
+O TSE só julga os registros depois do prazo de inscrição. Até lá,
+`DS_SITUACAO_CANDIDATURA` vem `#NE` em **todos** os registros, e a plataforma
+não exibe status — nem afirma deferimento, nem sugere irregularidade (ver
+`registroEmSituacaoAdversa` no frontend).
+
+Os deferimentos só entram na base quando **alguém reenviar o arquivo**. O cron
+diário relê o mesmo zip parado no bucket; ele não busca versão nova.
+
+**Por que não é automático:** o CDN do TSE responde `403` a qualquer cliente
+automatizado. Testado em 09/09/2026 — `curl` puro, `curl` com user-agent de
+navegador, com `Accept`/`Referer`, o portal `dadosabertos.tse.jus.br`, e até
+**Chromium real via Playwright**: todos `403`. Só navegação humana passa.
+Contornar exigiria automação de navegador com sessão, que quebraria em
+silêncio na próxima mudança do WAF do TSE.
+
+**A janela: 21h–23h (BRT).**
+
+| horário BRT | o que acontece |
+|---|---|
+| 21h–23h | você baixa do TSE pelo navegador e sobrescreve o arquivo |
+| 02:00 | COORTE relê e atualiza os status |
+| até ~04:00 | site reconstrói, porque o watermark mudou |
+
+Três horas de folga até o cron, e captura o que o TSE publicou no dia útil.
+
+**Sobrescreva com o nome idêntico** — `entrada/consulta_cand_2026.zip`. O cron
+aponta para esse nome fixo; um `_v2.zip` seria ignorado sem erro nenhum.
+
+Para saber se o reenvio surtiu efeito, no dia seguinte:
+
+```bash
+curl -fsS https://votecomdados.com.br/dados-abertos/$(date -u +%F)/candidatura.csv \
+  | awk -F, 'NR>1 && $3=="2026" {print $11}' | sort | uniq -c
+```
+
+Enquanto vier só `NAO_INFORMADO`, o TSE ainda não julgou.
 
 ---
 
