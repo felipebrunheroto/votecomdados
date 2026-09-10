@@ -288,19 +288,35 @@ assumem **~1.000 visitas/dia** em decisões concretas — o Redis foi removido
 porque ficaria frio nessa escala, o cache de cinco minutos foi dimensionado
 assim, e o porte do RDS idem. A premissa nunca foi medida.
 
-### Se um dia precisar de página por página
+### Requisições por página
 
-O log padrão do CloudFront (`logging_config` em `infra/edge.tf`, hoje
-desligado) grava cada requisição em S3. Em dinheiro é irrisório na escala
-prevista: ~450 mil requisições/mês a poucas centenas de bytes por linha
-comprimida dá dezenas de megabytes, ou **centavos por mês** de S3.
+O log de acesso do CloudFront está ligado desde 10/09/2026, no bucket
+`votecomdados-acesso-<conta>`, prefixo por data, **com expiração em 30 dias**.
 
-O custo real é outro: **log de acesso do CloudFront contém o IP do
-visitante.** Numa plataforma que se define por minimizar dado pessoal — que
-expurga CPF ao fim de cada coorte e recusou publicar foto de candidato —,
-passar a guardar IP de quem consulta perfis de políticos é uma decisão de
-princípio, não de orçamento. Se for ligado, ligue junto uma regra de expiração
-curta no bucket.
+**Não há como saber quem acessou, por construção.** Os campos gravados são
+apenas `date`, `time`, `cs-uri-stem`, `sc-status` e `x-edge-result-type`. IP,
+user-agent, referer, cookie, país e ASN **não são coletados** — o formato v2
+do CloudFront permite escolher, e escolheu-se não coletar.
+
+A consequência aceita: **visitante único é impossível de calcular.** O que se
+obtém é requisição por página, que é o que a pergunta pedia.
+
+Para contar as páginas mais acessadas de um dia:
+
+```bash
+aws s3 cp --recursive s3://votecomdados-acesso-<conta>/ ./log/ \
+  --exclude '*' --include '*2026-09-11*'
+gunzip -c ./log/**/*.gz | awk '$4 == "200" {print $3}' | sort | uniq -c | sort -rn | head -20
+```
+
+### Se um dia precisar de mais que isso
+
+Visitante único, sessão e origem do tráfego exigiriam identificar o visitante
+— por IP no log, ou por cookie/script de analytics. Ambos contradizem o
+recorte escolhido, e o segundo acrescenta um terceiro observando quem lê sobre
+políticos. Se a pergunta um dia mudar de "quantos" para "quem volta", isso
+vira decisão de princípio, não de orçamento: em dinheiro, o log completo
+custaria os mesmos centavos.
 
 ---
 
