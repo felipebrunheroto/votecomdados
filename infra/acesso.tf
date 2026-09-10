@@ -120,9 +120,16 @@ resource "aws_cloudwatch_log_delivery" "frontend_acesso" {
   record_fields = [
     "date",
     "time",
-    "cs-uri-stem",        # qual pagina — o dado que motivou ligar isto
-    "sc-status",          # separa 404 de visita de verdade
-    "x-edge-result-type", # hit/miss: mostra se a borda esta absorvendo
+    "cs-uri-stem", # qual pagina — o dado que motivou ligar isto
+    # NAO serve para achar 404: o edge.tf mapeia 403/404 para 200 com
+    # /404.html, que e o que faz o fallback dos ~28 mil perfis funcionar.
+    # Pagina inexistente e perfil renderizado no navegador registram o mesmo
+    # 200. Fica porque distingue resposta servida de erro de origem.
+    "sc-status",
+    # Hit/miss mostra se a borda esta absorvendo o trafego -- e e AQUI que a
+    # resposta de erro aparece, com "Error", ja que o status foi reescrito
+    # para 200.
+    "x-edge-result-type",
   ]
 
   depends_on = [aws_s3_bucket_policy.acesso]
