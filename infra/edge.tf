@@ -73,10 +73,18 @@ resource "aws_s3_bucket_policy" "frontend" {
 # já escala pela própria CDN sem custo incremental por requisição — não
 # há o mesmo motivo para rate-limit aqui. Ver infra/security.tf.
 #
-# Sem access logging: o tráfego já é observável via CloudWatch (ALB access
-# logs + métricas da API) — duplicar em S3 aqui é custo sem operador para
-# de fato revisar os logs de borda regularmente nesta escala (um único
-# operador, sem plantão — ARQUITETURA.md § 9).
+# Sem `logging_config`: o log de acesso existe, mas pelo formato v2, definido
+# em acesso.tf. A diferença não é de sintaxe — o formato legado grava um
+# conjunto FIXO de campos, incluindo `c-ip`, e não há como recusá-lo. O v2
+# deixa escolher, e lá se escolhe não coletar identificador nenhum do
+# visitante.
+#
+# Decisão revista em 10/09/2026. Antes não havia log algum, com o argumento de
+# que o tráfego já era observável via CloudWatch e que um operador único não
+# revisaria log de borda. O primeiro continua verdadeiro e insuficiente:
+# métrica de CloudWatch conta requisição, não diz QUAL página. O segundo
+# perdeu força quando a pergunta deixou de ser "auditar acesso" e passou a ser
+# "quais páginas interessam" — que se responde agregando, não revisando.
 # trivy:ignore:AWS-0011
 # trivy:ignore:AWS-0010
 resource "aws_cloudfront_distribution" "frontend" {

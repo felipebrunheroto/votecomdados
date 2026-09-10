@@ -42,15 +42,23 @@
 
 - id: AWS-0010
   statement: >-
-    CloudFront sem access logging: tráfego já observável via CloudWatch
-    (ALB); duplicar em S3 é custo sem operador dedicado a revisar.
+    CloudFront sem `logging_config`, que é o campo que o Trivy procura —
+    mas o log de acesso EXISTE, pelo formato v2 (infra/acesso.tf).
+    Revisto em 10/09/2026: o formato legado grava `c-ip` num conjunto
+    fixo de campos, e o v2 deixa escolher; escolheu-se não coletar
+    identificador nenhum do visitante. A regra continua acusando porque
+    olha o atributo, não o resultado.
 
 - id: AWS-0132
   statement: >-
-    Bucket do frontend com SSE-S3 (chave da AWS), não CMK — conteúdo já
-    público (export do site + dados abertos CC BY 4.0), sem necessidade
-    de KMS key própria. RDS e Secrets Manager, que guardam o que
-    realmente importa proteger, já usam criptografia gerenciada.
+    Buckets com SSE-S3 (chave da AWS), não CMK. Frontend: conteúdo já
+    público (export do site + dados abertos CC BY 4.0). Ingestão: o que
+    protege é o bloqueio de acesso e a policy restrita, não a
+    titularidade da chave. Acesso (acesso.tf): sem dado pessoal por
+    construção — os campos de identificação do visitante não são
+    coletados. Em todos, uma CMK só mudaria quem gerencia a rotação, com
+    mensalidade por chave. RDS e Secrets Manager, que guardam o que
+    realmente importa, já usam criptografia gerenciada.
 
 - id: AWS-0136
   statement: >-
