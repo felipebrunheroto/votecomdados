@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ManifestoDoPacote } from "@/componentes/dominio/ManifestoDoPacote";
 
 export const metadata: Metadata = {
   title: "Dados abertos",
@@ -58,8 +57,11 @@ export default function PaginaDadosAbertos() {
         </p>
       </header>
 
-      {/* A justificativa vem antes do botão de download de propósito: o motivo
-          de o pacote existir é mais importante que o pacote. */}
+      {/* A seção "O pacote publicado" -- manifesto e botão de download -- saiu
+          em 10/09/2026, por decisão de produto. A página ficou com a
+          justificativa e os avisos; quem quer os arquivos encontra o caminho
+          na seção sobre citação, que explica por que citar o endereço datado e
+          não o `latest`. */}
       <Secao id="s-porque" titulo="Por que publicamos isto">
         <p className="max-w-prose text-texto-suave">
           Esta plataforma faz uma afirmação que você não teria como conferir por
@@ -74,18 +76,6 @@ export default function PaginaDadosAbertos() {
           fé, não mostrando dado. Publicar a base curada inverte isso: quem
           discordar de um vínculo pode baixar o arquivo, refazer o cruzamento e
           mostrar onde erramos.
-        </p>
-      </Secao>
-
-      <Secao id="s-pacote" titulo="O pacote publicado">
-        <ManifestoDoPacote />
-        <p>
-          <a
-            href="/dados-abertos/latest/"
-            className="inline-block rounded-padrao bg-acento px-4 py-2 font-medium text-acento-contraste hover:opacity-90"
-          >
-            Abrir o pacote mais recente
-          </a>
         </p>
       </Secao>
 

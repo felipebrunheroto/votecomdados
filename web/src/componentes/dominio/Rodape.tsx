@@ -3,27 +3,28 @@ import Link from "next/link";
 /**
  * Rodapé do site.
  *
- * <h2>Os links para dados abertos saíram daqui (10/09/2026)</h2>
+ * <h2>Uma linha para os dados abertos, não duas (10/09/2026)</h2>
  *
- * Decisão de produto: o rodapé ficou só com "Sobre os dados".
+ * O rodapé tinha dois itens: a página que explica o pacote e um link direto
+ * ao pacote. Ficou só o primeiro.
  *
- * O pacote continua sendo gerado, publicado e servido — o que mudou foi a
- * divulgação nesta tela. Quem chega nele hoje vem do perfil do candidato, que
- * linka `/dados-abertos`; a página segue explicando o pacote, e o
- * `ManifestoDoPacote` continua lendo `/dados-abertos/latest/manifesto.json`.
+ * O que o link preserva é o que importa: a plataforma faz uma afirmação
+ * impossível de conferir de fora — "este deputado é esta candidata" — e o
+ * pacote de dados abertos é o que a torna auditável. Estar em toda tela é o
+ * que garante que quem quiser conferir encontre; depender de a pessoa chegar
+ * a um perfil não garantiria.
  *
- * Vale registrar o que se perdeu, porque foi uma escolha e não um descuido: o
- * argumento original era que a plataforma faz uma afirmação impossível de
- * conferir de fora — "este deputado é esta candidata" — e o pacote é o que a
- * torna auditável. Estar em toda tela era a forma de garantir que quem quisesse
- * conferir encontrasse. Agora depende de a pessoa chegar a um perfil.
+ * O que se perdeu é o atalho de um clique até o arquivo. Quem quer os CSVs
+ * passa pela página, que agora é o único caminho — e é ela que explica os
+ * cinco avisos que o pacote exige antes de ser usado, o que torna a parada
+ * intencional em vez de atrito.
  *
- * <h2>Se um link para o pacote voltar: `<a>`, nunca `<Link>`</h2>
+ * <h2>Se um link direto ao pacote voltar: `<a>`, nunca `<Link>`</h2>
  *
  * `/dados-abertos/latest/` **não é rota do Next** — são arquivos que o worker
  * de ingestão publica na mesma CDN. Um `<Link>` tentaria navegação
  * client-side para uma rota que o roteador não conhece e quebraria a
- * navegação.
+ * navegação. A página `/dados-abertos` (essa sim, rota) usa `<Link>`.
  */
 export function Rodape() {
   return (
@@ -37,6 +38,15 @@ export function Rodape() {
                 Sobre os dados
               </Link>
               {" — "}de onde vem cada informação, o que cobrimos e o que não.
+            </li>
+            <li>
+              <Link
+                href="/dados-abertos"
+                className="underline underline-offset-2 hover:text-texto"
+              >
+                Dados abertos
+              </Link>
+              {" — "}a base inteira para baixar, conferir e reusar.
             </li>
           </ul>
         </nav>
