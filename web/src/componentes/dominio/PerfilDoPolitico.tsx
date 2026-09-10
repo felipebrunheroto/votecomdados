@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { PoliticoPerfil } from "@/lib/api/tipos";
-import { rotularCargo, rotularStatusCandidatura } from "@/lib/formato";
+import { rotularCargo, rotularStatusCandidatura, registroEmSituacaoAdversa } from "@/lib/formato";
 import { AbasDeAtuacao } from "@/componentes/dominio/AbasDeAtuacao";
 import { AvisoDeCobertura } from "@/componentes/dominio/AvisoDeCobertura";
 import { TrajetoriaPolitica } from "@/componentes/dominio/TrajetoriaPolitica";
@@ -25,7 +25,7 @@ import { TrajetoriaPolitica } from "@/componentes/dominio/TrajetoriaPolitica";
 export function PerfilDoPolitico({ perfil }: { perfil: PoliticoPerfil }) {
   const nome = perfil.nomeUrna ?? perfil.nomeCivil;
   const atual = perfil.trajetoria[0];
-  const registroIrregular = atual.status !== "DEFERIDO";
+  const registroIrregular = registroEmSituacaoAdversa(atual.status);
 
   return (
     <article className="space-y-8">
