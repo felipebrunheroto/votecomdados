@@ -133,6 +133,49 @@ jobs:
             exit 1
           fi
 
+      # Tráfego não é guardrail, mas chega junto porque o custo marginal é
+      # zero: a métrica já existe, o job já tem credencial, e ninguém vai
+      # abrir console toda semana só para isso.
+      #
+      # ARQUITETURA.md e o plano de custos assumem "~1.000 visitas/dia" em
+      # várias decisões -- Redis removido, cache de 5 min, porte do RDS. Nunca
+      # foi medido. Este número é o que permite conferir a premissa.
+      - name: trafego dos ultimos 7 dias
+        run: |
+          set -euo pipefail
+
+          FIM=$(date -u +%Y-%m-%dT%H:00:00Z)
+          INICIO=$(date -u -d '7 days ago' +%Y-%m-%dT%H:00:00Z)
+
+          aws cloudwatch get-metric-statistics \
+            --namespace AWS/CloudFront \
+            --metric-name Requests \
+            --dimensions Name=DistributionId,Value=${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} \
+                         Name=Region,Value=Global \
+            --start-time "$INICIO" --end-time "$FIM" \
+            --period 86400 --statistics Sum \
+            --query 'sort_by(Datapoints,&Timestamp)[].[Timestamp,Sum]' \
+            --output text > trafego.txt || true
+
+          {
+            echo ""
+            echo "### Requisições no CloudFront (7 dias)"
+            echo ""
+            if [ -s trafego.txt ]; then
+              echo "| dia | requisições |"
+              echo "|---|---|"
+              while read -r ts soma; do
+                printf "| %s | %.0f |\n" "${ts%%T*}" "$soma"
+              done < trafego.txt
+              echo ""
+              echo "_Requisição não é visita._ Uma página estática carrega HTML"
+              echo "mais vários chunks de JS e fontes, então o número infla."
+              echo "Serve para tendência, não para contar pessoas."
+            else
+              echo "Sem dado no período — distribuição nova, ou sem tráfego."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Isto e o unico passo que MUDA algo, e por isso e opt-in. Forcar o
       # estado e melhor que "gastar de proposito": a metrica de billing so
       # atualiza a cada ~6h, e cruzar 50% de US$170 de verdade custaria
