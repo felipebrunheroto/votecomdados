@@ -306,8 +306,15 @@ Para contar as páginas mais acessadas de um dia:
 ```bash
 aws s3 cp --recursive s3://votecomdados-acesso-<conta>/ ./log/ \
   --exclude '*' --include '*2026-09-11*'
-gunzip -c ./log/**/*.gz | awk '$4 == "200" {print $3}' | sort | uniq -c | sort -rn | head -20
+gunzip -c ./log/**/*.gz | awk '{print $3}' | sort | uniq -c | sort -rn | head -20
 ```
+
+**Não filtre por `sc-status == 200` esperando excluir páginas inexistentes.**
+O CloudFront reescreve 403/404 para 200 servindo `/404.html` — é o que faz o
+fallback dos ~28 mil perfis funcionar (ver `custom_error_response` em
+`infra/edge.tf`). Perfil renderizado no navegador e endereço digitado errado
+registram o mesmo 200. Quem separa os dois é `x-edge-result-type`, que traz
+`Error` nesses casos.
 
 ### Se um dia precisar de mais que isso
 
