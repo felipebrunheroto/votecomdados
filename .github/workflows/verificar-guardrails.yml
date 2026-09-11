@@ -24,9 +24,25 @@ on:
         type: boolean
         default: false
   schedule:
-    # Segunda 06:40 UTC, junto do CodeQL (06:00) e do Trivy (06:23): a
-    # conferencia semanal fica num bloco so.
-    - cron: "40 6 * * 1"
+    # DIARIO, 06:40 UTC. Era semanal, junto do CodeQL e do Trivy, tratando
+    # isto como varredura de seguranca. Nao e: e conferencia operacional, e a
+    # diferenca ficou clara em 11/09/2026.
+    #
+    # Alarme cobre o que DISPARA -- ingestao quebrada, 5xx, custo. Este
+    # workflow cobre o que nao dispara nada:
+    #
+    #   - assinatura do SNS sumida (aconteceu: deixou TODO alarme mudo)
+    #   - "Receive Billing Alerts" desligado na conta (aconteceu)
+    #   - retencao de backup sem snapshot nenhum
+    #
+    # As tres sao silenciosas por natureza. Na cadencia semanal, uma delas
+    # numa terca so apareceria na segunda seguinte -- e, se fosse a primeira,
+    # nenhum alarme funcionaria durante o intervalo inteiro.
+    #
+    # Custa algumas chamadas de leitura e o download dos logs do dia. Em
+    # repositorio publico os minutos sao gratuitos. O preco de errar a
+    # cadencia para menos e bem maior que o de rodar todo dia.
+    - cron: "40 6 * * *"
 
 permissions:
   id-token: write

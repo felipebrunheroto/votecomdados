@@ -27,7 +27,7 @@ _unsubscribe_ no rodapé.
 **Assinatura de e-mail do SNS não é protegida pelo Terraform.** Qualquer
 pessoa que receba um alarme pode cancelá-la com um clique, e o código
 continua dizendo que ela existe. É exatamente o tipo de divergência que
-"estar no código" não garante, e por isso esta verificação roda toda segunda.
+"estar no código" não garante, e por isso esta verificação roda todo dia.
 
 Para restaurar: `terraform apply` recria a assinatura, e é preciso **clicar no
 link de confirmação** que a AWS manda para o e-mail de billing. Depois, rode
@@ -36,7 +36,7 @@ o workflow de novo e confirme `confirmadas: 1`.
 ## 1. Alarme de billing
 
 O workflow **Verificar guardrails** (`.github/workflows/verificar-guardrails.yml`)
-roda toda segunda 06:40 UTC e sob demanda. Ele checa as três coisas que podem
+roda todo dia 06:40 UTC e sob demanda. Ele checa as três coisas que podem
 estar erradas sem nenhum sinal visível:
 
 - **Assinatura de e-mail pendente.** A AWS manda um link de confirmação quando
