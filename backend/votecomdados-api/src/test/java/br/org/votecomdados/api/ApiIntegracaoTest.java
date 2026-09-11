@@ -58,6 +58,41 @@ class ApiIntegracaoTest {
 
     /** Corpo de uma resposta bem-sucedida. */
     @SuppressWarnings("unchecked")
+    /**
+     * O cabeçalho de cache é posto DEPOIS da cadeia de filtros, e isso só
+     * funciona enquanto a resposta não tiver sido enviada. Respostas pequenas
+     * de JSON ficam em buffer, mas "costuma ficar" não é garantia — por isso
+     * o teste bate no cabeçalho de verdade, e não na existência do filtro.
+     */
+    @Test
+    void leitura_bem_sucedida_pede_cache_curto_ao_navegador() {
+        var r = http.get().uri("/api/v1/meta/status").retrieve().toEntity(Map.class);
+
+        assertThat(r.getHeaders().getFirst("Cache-Control"))
+            .isEqualTo("public, max-age=30");
+    }
+
+    /**
+     * Erro não se cacheia: meio minuto de repetição esconderia uma falha
+     * momentânea, e o 404 de um id digitado errado não pode sobreviver à
+     * correção do id.
+     */
+    @Test
+    void resposta_de_erro_nao_pede_cache() {
+        // `onStatus` que nao faz nada desliga o tratamento padrao, que
+        // lancaria excecao e esconderia os cabecalhos.
+        var r = http.get().uri("/api/v1/proposicoes/999999999")
+            .retrieve()
+            .onStatus(status -> true, (pedido, resposta) -> { })
+            .toBodilessEntity();
+
+        assertThat(r.getStatusCode().is2xxSuccessful()).isFalse();
+        assertThat(r.getHeaders().getFirst("Cache-Control"))
+            .satisfiesAnyOf(
+                v -> assertThat(v).isNull(),
+                v -> assertThat(v).doesNotContain("max-age=30"));
+    }
+
     private Map<String, Object> obter(String caminho) {
         return http.get().uri(caminho).retrieve().body(Map.class);
     }
