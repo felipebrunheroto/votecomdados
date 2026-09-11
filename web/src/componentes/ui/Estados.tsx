@@ -26,13 +26,17 @@ export function Vazio({
   titulo, descricao, children,
 }: {
   titulo: string;
-  descricao: string;
+  /** Opcional: há vazio que se explica sozinho, e um `<p>` em branco só
+      deixaria espaço morto sob o título. */
+  descricao?: string;
   children?: React.ReactNode;
 }) {
   return (
     <div className="rounded-padrao border border-dashed border-borda px-4 py-8 text-center">
       <p className="font-medium text-texto">{titulo}</p>
-      <p className="mx-auto mt-1 max-w-prose text-sm text-texto-suave">{descricao}</p>
+      {descricao && (
+        <p className="mx-auto mt-1 max-w-prose text-sm text-texto-suave">{descricao}</p>
+      )}
       {children && <div className="mt-3">{children}</div>}
     </div>
   );
