@@ -90,10 +90,7 @@ export function BuscaDeCandidatos() {
         />}
 
       {!temCriterio && (
-        <Vazio
-          titulo="Busque por um nome, cargo ou estado"
-          descricao="Nenhum candidato aparece aqui por padrão: listar sempre os mesmos daria destaque a quem a plataforma não escolheu destacar. Quem decide quem aparece é você."
-        />
+        <Vazio titulo="Busque por um nome, cargo ou estado" />
       )}
 
       {temCriterio && estado === "pronto" && resultado && resultado.data.length === 0 && (
