@@ -129,6 +129,9 @@ public class JobDeCoorte {
      * o HMAC antes de ele ter costurado a trajetória.
      */
     public void encerrar() {
+        // Antes da poda e do expurgo: depois deles a evidencia some.
+        repositorio.relatarAncorasEmConflito();
+
         // A poda apaga quem NAO tem candidatura no ano da coorte. Se o ano da
         // coorte nao tem candidatura nenhuma, isso e "apague todo mundo" --
         // que e o resultado de rodar o job so com pacote de eleicao anterior.

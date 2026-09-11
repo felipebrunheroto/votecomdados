@@ -240,6 +240,59 @@ class JobDeCoorteTest {
     }
 
     /**
+     * O que derrubou o cron diário em 10 e 11/09/2026.
+     *
+     * <p>Duas linhas de {@code politico} com o mesmo CPF e nomes DIFERENTES —
+     * duplicata que já existia. Repor a âncora tentava gravar o mesmo
+     * `cpf_hmac` nas duas, e o índice único estourava a execução inteira: nada
+     * mais carregava, o `encerrar` não rodava, e o CPF ficava sem expurgo.
+     *
+     * <p>Seguir e contar é melhor que abortar tudo. O defeito de dado continua
+     * lá, e agora aparece como aviso em vez de queda.
+     */
+    @Test
+    void cpf_repetido_em_duas_pessoas_nao_derruba_a_execucao() {
+        // Primeira execução: cria a pessoa e expurga a âncora.
+        job.carregarAno(execucao, linhas(
+            candidatura("900000000061", 2026, "6", "SP", "NOME COMO O TSE GRAFOU",
+                        "FULANO", "45645645645")));
+        job.encerrar();
+
+        // Uma segunda pessoa com o MESMO CPF, grafia diferente, E COM
+        // CANDIDATURA PRÓPRIA de 2026 — é a candidatura que faz `encontrar`
+        // devolver ESTA linha em vez da outra, e sem ela não há colisão.
+        // Foi o que a primeira versão deste teste errou: sem candidatura, a
+        // segunda linha era encontrada pela âncora e se anexava à primeira.
+        var outra = jdbc.sql("""
+            INSERT INTO politico (nome_civil, data_nascimento)
+            VALUES ('NOME COM OUTRA GRAFIA', DATE '1975-04-12') RETURNING id
+            """).query(java.util.UUID.class).single();
+        jdbc.sql("""
+            INSERT INTO candidatura (politico_id, sq_candidato_tse, ano_eleicao,
+                                     cargo, esfera, uf, partido_sigla, status)
+            VALUES (:p, '900000000062', 2026, 'DEPUTADO_FEDERAL'::cargo_enum,
+                    'FEDERAL'::esfera_enum, 'SP', 'XXX',
+                    'NAO_INFORMADO'::status_candidatura_enum)
+            """).param("p", outra).update();
+
+        // Reexecução: as duas disputam a mesma âncora.
+        assertThatCode(() -> {
+            job.carregarAno(execucao, linhas(
+                candidatura("900000000061", 2026, "6", "SP", "NOME COMO O TSE GRAFOU",
+                            "FULANO", "45645645645")));
+            job.carregarAno(execucao, linhas(
+                candidatura("900000000062", 2026, "6", "SP", "NOME COM OUTRA GRAFIA",
+                            "OUTRO", "45645645645")));
+            job.encerrar();
+        }).doesNotThrowAnyException();
+
+        assertThat(jdbc.sql("SELECT count(*) FROM politico WHERE cpf_hmac IS NOT NULL")
+            .query(Long.class).single())
+            .as("o expurgo rodou: a execucao chegou ao fim")
+            .isZero();
+    }
+
+    /**
      * A poda apaga quem não tem candidatura no ano da coorte. Rodar o job só
      * com pacote de eleição anterior torna isso "apague todo mundo" — e o
      * sintoma seria o site vazio, não um erro.
