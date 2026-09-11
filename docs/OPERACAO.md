@@ -23,7 +23,7 @@ Para infraestrutura do zero, ver `infra/BOOTSTRAP.md` e
 | de hora em hora | rebuild do site, **se o watermark mudou** | GitHub Actions |
 | seg 06:00 | CodeQL | GitHub Actions |
 | seg 06:23 | Trivy na imagem | GitHub Actions |
-| seg 06:40 | Verificar guardrails | GitHub Actions |
+| **diário 06:40** | Verificar guardrails | GitHub Actions |
 
 **O cron do GitHub não é pontual.** Em repositório público a fila atrasa de
 minutos a mais de uma hora; runs saem às :26, :04, :15. "De hora em hora" é
@@ -275,7 +275,7 @@ Enquanto vier só `NAO_INFORMADO`, o TSE ainda não julgou.
 
 ## 4.2 Quantas pessoas visitam o site
 
-O workflow **Verificar guardrails** publica, junto da checagem semanal, as
+O workflow **Verificar guardrails** publica, junto da checagem diária, as
 requisições do CloudFront por dia nos últimos 7 dias.
 
 **Requisição não é visita.** Uma página estática carrega o HTML mais vários
