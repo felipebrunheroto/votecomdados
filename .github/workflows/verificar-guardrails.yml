@@ -229,21 +229,29 @@ jobs:
           echo "linhas cruas: $(wc -l < cru/tudo.txt 2>/dev/null || echo 0)"
           echo "primeira linha: $(head -1 cru/tudo.txt 2>/dev/null | cut -c1-160)"
 
-          # Onde esta cs-uri-stem: do cabecalho `#Fields:` quando existir (o
-          # formato legado o emite), senao pela ordem declarada em
-          # infra/acesso.tf -- date, time, cs-uri-stem, sc-status,
-          # x-edge-result-type. A entrega v2 escreve nessa ordem e sem
-          # cabecalho, e foi o que fez a primeira versao deste passo descartar
-          # tudo: exigia o cabecalho e ficava com coluna 0.
+          # Onde esta cs-uri-stem, por ordem de confianca:
+          #
+          #   1. cabecalho do v2 -- os nomes dos campos SEM prefixo, que foi o
+          #      que o diagnostico mostrou em producao (11/09/2026);
+          #   2. cabecalho legado `#Fields:`, com prefixo;
+          #   3. a ordem declarada em infra/acesso.tf, como ultimo recurso.
+          #
+          # A primeira versao deste passo so conhecia (2) e descartava tudo. A
+          # segunda acertou por acidente -- caiu em (3) e a posicao coincidia.
+          # Ler o nome e melhor que contar coluna: se alguem mexer em
+          # record_fields, isto acompanha em vez de passar a contar errado.
           awk '
             /^#Fields:/ {
               for (i = 2; i <= NF; i++) if ($i == "cs-uri-stem") coluna = i - 1
-              temCabecalho = 1
               next
             }
             /^#/ { next }
+            coluna == 0 && $0 ~ /cs-uri-stem/ {
+              for (i = 1; i <= NF; i++) if ($i == "cs-uri-stem") coluna = i
+              next
+            }
             {
-              if (!temCabecalho && coluna == 0) coluna = 3
+              if (coluna == 0) coluna = 3
               caminho = $coluna
               if (caminho == "" || caminho !~ /^\//) next
               if (caminho ~ /^\/_next\//) next
