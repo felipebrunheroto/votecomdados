@@ -2,6 +2,8 @@ package br.org.votecomdados.ingestion.coorte;
 
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -16,6 +18,17 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class RepositorioDeCoorte {
+
+    private static final Logger log = LoggerFactory.getLogger(RepositorioDeCoorte.class);
+
+    /**
+     * Quantas vezes a âncora não pôde ser reposta por já pertencer a outra
+     * pessoa. Cada uma é um par de linhas em `politico` com o mesmo CPF —
+     * defeito de dado que precisa de gente para resolver, porque decidir qual
+     * das duas fica (e para onde vão candidatura, voto e autoria da outra) não
+     * é escolha que código deva fazer sozinho.
+     */
+    private int ancorasEmConflito;
 
     private final JdbcClient jdbc;
 
@@ -103,7 +116,9 @@ public class RepositorioDeCoorte {
     public UUID encontrarOuCriar(CandidaturaDoTse c) {
         var achado = encontrar(c);
         if (achado.isPresent()) {
-            atualizarDadosPessoais(achado.get(), c);
+            if (!atualizarDadosPessoais(achado.get(), c)) {
+                ancorasEmConflito++;
+            }
             return achado.get();
         }
 
@@ -173,6 +188,22 @@ public class RepositorioDeCoorte {
      * <p>Recuperar depois é barato (reingestão pelos CSVs arquivados), então a
      * decisão erra para o lado de guardar menos.
      */
+    /**
+     * Denuncia os conflitos de âncora ao fim da execução, e zera o contador.
+     *
+     * <p>Um número aqui não é ruído: significa que duas linhas de
+     * {@code politico} dividem um CPF, e portanto que a trajetória de alguém
+     * está partida em duas — metade dos votos numa, metade na outra.
+     */
+    public void relatarAncorasEmConflito() {
+        if (ancorasEmConflito > 0) {
+            log.warn("{} ancora(s) de CPF nao reposta(s) por ja pertencerem a outra "
+                     + "pessoa: ha registros DUPLICADOS em politico, e a trajetoria "
+                     + "dessas pessoas esta partida entre duas linhas", ancorasEmConflito);
+        }
+        ancorasEmConflito = 0;
+    }
+
     /** Quantas candidaturas do ano existem — a base da poda. */
     public long candidaturasEm(int ano) {
         return jdbc.sql("SELECT count(*) FROM candidatura WHERE ano_eleicao = :ano")
@@ -207,7 +238,12 @@ public class RepositorioDeCoorte {
             .update();
     }
 
-    private void atualizarDadosPessoais(UUID id, CandidaturaDoTse c) {
+    /**
+     * @return {@code false} quando a âncora NÃO pôde ser reposta porque outra
+     *         pessoa já a tem — ou seja, duas linhas de {@code politico} com o
+     *         mesmo CPF
+     */
+    private boolean atualizarDadosPessoais(UUID id, CandidaturaDoTse c) {
         // A candidatura mais recente manda: nome de urna e partido mudam entre
         // eleições, e o perfil deve mostrar o mais atual.
         //
@@ -218,20 +254,37 @@ public class RepositorioDeCoorte {
         // cairia no último recurso -- nome civil + nascimento --, que é
         // justamente o que a âncora existe para evitar. Ele volta a ser
         // expurgado no `encerrar`, então não fica em repouso.
-        jdbc.sql("""
+        //
+        // O CASE existe porque repor a âncora quebrou o cron diário em 10 e
+        // 11/09/2026: `idx_politico_cpf_hmac` é único, e a base tem duas
+        // pessoas com o mesmo CPF e nomes diferentes -- defeito de dado que
+        // existia antes e que a reposição trouxe à tona. Estourar a execução
+        // inteira por causa disso deixa TODO o resto sem carregar; preferível
+        // seguir e contar o caso, que é o que o `RETURNING` permite.
+        return Boolean.TRUE.equals(jdbc.sql("""
                 UPDATE politico
-                   SET cpf_hmac = coalesce(:hmac, cpf_hmac),
+                   SET cpf_hmac = CASE
+                           WHEN :hmac IS NULL THEN cpf_hmac
+                           WHEN EXISTS (SELECT 1 FROM politico outro
+                                         WHERE outro.cpf_hmac = :hmac
+                                           AND outro.id <> :id) THEN cpf_hmac
+                           ELSE :hmac
+                       END,
                        nome_urna = coalesce(:urna, nome_urna),
                        data_nascimento = coalesce(:nascimento, data_nascimento),
                        genero = coalesce(:genero, genero),
                        atualizado_em = now()
                  WHERE id = :id
+             -- IS NOT DISTINCT FROM, e nao `=`: com a coluna nula, `=` devolve
+             -- NULL, e `false OR NULL` tambem e NULL -- o RETURNING deixava de
+             -- ser booleano e a leitura estourava.
+             RETURNING (:hmac IS NULL OR cpf_hmac IS NOT DISTINCT FROM :hmac)
                 """)
             .param("id", id)
             .param("hmac", c.cpfHmac())
             .param("urna", c.nomeUrna())
             .param("nascimento", c.dataNascimento())
             .param("genero", c.genero())
-            .update();
+            .query(Boolean.class).single());
     }
 }
