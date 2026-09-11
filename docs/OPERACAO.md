@@ -301,7 +301,12 @@ do CloudFront permite escolher, e escolheu-se não coletar.
 A consequência aceita: **visitante único é impossível de calcular.** O que se
 obtém é requisição por página, que é o que a pergunta pedia.
 
-Para contar as páginas mais acessadas de um dia:
+As dez páginas mais acessadas dos últimos 7 dias saem automaticamente no
+workflow **Verificar guardrails**, junto do relatório de segunda. Assets
+(`/_next/`, fontes, ícones) ficam de fora — uma visita carrega dezenas deles e
+afogaria a lista.
+
+Para uma análise própria, de um dia específico:
 
 ```bash
 aws s3 cp --recursive s3://votecomdados-acesso-<conta>/ ./log/ \
