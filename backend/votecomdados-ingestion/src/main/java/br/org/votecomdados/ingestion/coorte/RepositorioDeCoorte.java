@@ -264,7 +264,12 @@ public class RepositorioDeCoorte {
         return Boolean.TRUE.equals(jdbc.sql("""
                 UPDATE politico
                    SET cpf_hmac = CASE
-                           WHEN :hmac IS NULL THEN cpf_hmac
+                           -- CAST porque um parametro solto em `IS NULL` nao
+                           -- tem com que o Postgres inferir o tipo. Sem ele,
+                           -- toda linha SEM CPF utilizavel derrubaria a
+                           -- execucao -- e com a validacao de digito
+                           -- verificador essas linhas passam a ser comuns.
+                           WHEN CAST(:hmac AS text) IS NULL THEN cpf_hmac
                            WHEN EXISTS (SELECT 1 FROM politico outro
                                          WHERE outro.cpf_hmac = :hmac
                                            AND outro.id <> :id) THEN cpf_hmac
@@ -278,7 +283,8 @@ public class RepositorioDeCoorte {
              -- IS NOT DISTINCT FROM, e nao `=`: com a coluna nula, `=` devolve
              -- NULL, e `false OR NULL` tambem e NULL -- o RETURNING deixava de
              -- ser booleano e a leitura estourava.
-             RETURNING (:hmac IS NULL OR cpf_hmac IS NOT DISTINCT FROM :hmac)
+             RETURNING (CAST(:hmac AS text) IS NULL
+                        OR cpf_hmac IS NOT DISTINCT FROM CAST(:hmac AS text))
                 """)
             .param("id", id)
             .param("hmac", c.cpfHmac())
