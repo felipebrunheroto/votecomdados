@@ -28,6 +28,28 @@ resource "aws_sns_topic_subscription" "alarmes_email" {
   endpoint  = var.billing_alert_email
 }
 
+# --- Relatório diário: tópico SEPARADO do de alarmes, de propósito ---
+#
+# Alarme só funciona se for raro. O `votecomdados-alarmes` manda mensagem
+# quando algo quebra — o que, correndo bem, é quase nunca. Pôr um relatório
+# diário no mesmo canal faria a pessoa criar regra de filtro ou passar a
+# arquivar sem ler, e no dia do alarme de verdade ele iria pelo mesmo caminho.
+#
+# Dois tópicos custam o mesmo (o SNS cobra por notificação, não por tópico, e
+# 1.000 e-mails/mês são gratuitos — um relatório diário são ~30). O que se
+# compra é que cada caixa de entrada mantenha seu significado: uma que se lê
+# com calma, outra que se abre na hora.
+resource "aws_sns_topic" "relatorio" {
+  name              = "votecomdados-relatorio"
+  kms_master_key_id = "alias/aws/sns"
+}
+
+resource "aws_sns_topic_subscription" "relatorio_email" {
+  topic_arn = aws_sns_topic.relatorio.arn
+  protocol  = "email"
+  endpoint  = var.billing_alert_email
+}
+
 # --- Billing: 50/80/100% do teto de referência (~US$170/mês — ver
 #     ARQUITETURA.md § 9 "Orçamento"; os 45 dias de CUSTOS_INFRA_AWS.md
 #     equivalem a ~US$157/mês, então US$170 é a mesma folga já documentada,
