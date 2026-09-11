@@ -86,8 +86,41 @@ jobs:
               echo "Os alarmes disparam e a notificacao nao chega. A AWS mandou um"
               echo "e-mail de confirmacao para o endereco de billing quando o topico"
               echo "foi criado — e preciso clicar no link dele."
-            } >> "$GITHUB_STEP_SUMMARY"
+            } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
             exit 1
+          fi
+
+      # O topico de relatorio tem a MESMA fragilidade do de alarmes: assinatura
+      # de e-mail exige confirmacao, e sem ela nao chega nada -- so que aqui a
+      # ausencia seria ainda mais silenciosa, porque relatorio que nao chega
+      # parece "dia sem novidade".
+      - name: a assinatura do relatorio esta confirmada?
+        run: |
+          set -euo pipefail
+          TOPICO=$(aws sns list-topics \
+            --query "Topics[?ends_with(TopicArn, ':votecomdados-relatorio')].TopicArn | [0]" \
+            --output text)
+
+          if [ "$TOPICO" = "None" ] || [ -z "$TOPICO" ]; then
+            echo "topico de relatorio ainda nao existe"
+            exit 0
+          fi
+
+          PEND=$(aws sns list-subscriptions-by-topic --topic-arn "$TOPICO" \
+            --query "length(Subscriptions[?SubscriptionArn=='PendingConfirmation'])" --output text)
+          OK=$(aws sns list-subscriptions-by-topic --topic-arn "$TOPICO" \
+            --query "length(Subscriptions[?SubscriptionArn!='PendingConfirmation'])" --output text)
+          echo "relatorio — confirmadas: $OK | pendentes: $PEND"
+
+          if [ "$OK" -eq 0 ]; then
+            {
+              echo ""
+              echo "### Relatório por e-mail não está chegando"
+              echo ""
+              echo "A assinatura do tópico \`votecomdados-relatorio\` não foi"
+              echo "confirmada. A AWS mandou um link para o e-mail de billing;"
+              echo "sem clicar nele, este relatório existe e não chega a ninguém."
+            } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: os alarmes de custo tem dado para avaliar?
@@ -106,7 +139,7 @@ jobs:
             echo '```'
             cat estados.txt
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
 
           # INSUFFICIENT_DATA num alarme de billing quase sempre significa
           # "Receive Billing Alerts" desligado nas preferencias da conta.
@@ -121,7 +154,7 @@ jobs:
               echo "**O alarme de billing nunca vai disparar.** A metrica AWS/Billing so"
               echo "existe com _Receive Billing Alerts_ ligado em Billing Preferences —"
               echo "e configuracao de conta, o Terraform nao liga."
-            } >> "$GITHUB_STEP_SUMMARY"
+            } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
@@ -142,7 +175,7 @@ jobs:
             echo ""
             echo "- retencao: **$RETENCAO dia(s)**"
             echo "- snapshot automatico mais recente: **$ULTIMO**"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$ULTIMO" = "None" ]; then
             echo "::error::nenhum snapshot automatico — backup configurado nao e backup existente"
@@ -190,7 +223,7 @@ jobs:
             else
               echo "Sem dado no período — distribuição nova, ou sem tráfego."
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
 
       # Quais páginas interessam — a metade da pergunta que a métrica do
       # CloudWatch não responde, porque ela conta requisição sem saber de quê.
@@ -219,7 +252,7 @@ jobs:
               echo ""
               echo "Sem log no período. O CloudFront entrega em lote — se o"
               echo "logging foi ligado há pouco, ainda não há arquivo."
-            } >> "$GITHUB_STEP_SUMMARY"
+            } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
@@ -293,7 +326,51 @@ jobs:
               echo "Arquivos encontrados, mas nenhuma linha de página — pode ser"
               echo "tráfego só de assets, ou mudança no formato do log."
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
+
+      # O relatorio vai por e-mail, no topico SEPARADO do de alarmes.
+      #
+      # `if: always()` porque a mensagem mais importante e justamente a de um
+      # run que FALHOU: e quando a assinatura sumiu, o billing esta desligado
+      # ou o backup nao existe. Mandar so quando tudo vai bem seria mandar
+      # exatamente quando nao precisa.
+      - name: manda o relatorio por e-mail
+        if: always() && github.event_name == 'schedule'
+        run: |
+          set -uo pipefail
+
+          TOPICO=$(aws sns list-topics \
+            --query "Topics[?ends_with(TopicArn, ':votecomdados-relatorio')].TopicArn | [0]" \
+            --output text)
+          if [ "$TOPICO" = "None" ] || [ -z "$TOPICO" ]; then
+            echo "::warning::topico de relatorio nao existe; nada enviado"
+            exit 0
+          fi
+
+          # Markdown vira texto: negrito e cerca de tabela nao ajudam ninguem
+          # num cliente de e-mail em texto puro.
+          # A ultima expressao apaga a linha separadora de tabela markdown
+          # (|---|---|), que em texto puro e so ruido.
+          sed -e 's/\*\*//g' -e 's/^### /== /' -e 's/^_//' -e 's/_$//' \
+              -e '/^|[-|[:space:]]*|$/d' \
+            relatorio.txt > corpo.txt 2>/dev/null || echo "(sem conteudo)" > corpo.txt
+
+          {
+            echo "Relatorio diario do VoteComDados"
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            cat corpo.txt
+          } > mensagem.txt
+
+          # 256 KB e o limite do SNS; o relatorio e muito menor, mas cortar e
+          # melhor que a publicacao falhar em silencio num dia atipico.
+          head -c 200000 mensagem.txt > enviar.txt
+
+          aws sns publish --topic-arn "$TOPICO" \
+            --subject "VoteComDados - conferencia diaria" \
+            --message "file://enviar.txt" >/dev/null \
+            && echo "relatorio enviado" \
+            || echo "::warning::falha ao publicar o relatorio"
 
       # Isto e o unico passo que MUDA algo, e por isso e opt-in. Forcar o
       # estado e melhor que "gastar de proposito": a metrica de billing so
@@ -322,4 +399,4 @@ jobs:
             echo "Confira a caixa de entrada do e-mail de billing: devem ter chegado"
             echo "duas mensagens (ALARM e OK). Se nao chegaram, o problema esta na"
             echo "entrega, nao na regra — e nenhum alarme deste projeto funciona."
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"

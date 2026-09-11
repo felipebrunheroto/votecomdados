@@ -23,11 +23,27 @@ Para infraestrutura do zero, ver `infra/BOOTSTRAP.md` e
 | de hora em hora | rebuild do site, **se o watermark mudou** | GitHub Actions |
 | seg 06:00 | CodeQL | GitHub Actions |
 | seg 06:23 | Trivy na imagem | GitHub Actions |
-| **diário 06:40** | Verificar guardrails | GitHub Actions |
+| **diário 06:40** | Verificar guardrails, **com relatório por e-mail** | GitHub Actions |
 
 **O cron do GitHub não é pontual.** Em repositório público a fila atrasa de
 minutos a mais de uma hora; runs saem às :26, :04, :15. "De hora em hora" é
 aproximado.
+
+### O relatório diário chega por e-mail
+
+Vai para o tópico **`votecomdados-relatorio`**, separado do de alarmes de
+propósito: alarme só funciona se for raro, e um e-mail diário no mesmo canal
+faria você criar regra de filtro — que um dia engoliria o alarme de verdade.
+
+Ele é enviado **mesmo quando a conferência falha**. É justamente aí que a
+mensagem importa: assinatura sumida, billing desligado, backup inexistente.
+
+Se parar de chegar, a causa mais provável é a assinatura não confirmada — a
+AWS manda um link e ele expira. O próprio relatório avisa disso, e o passo de
+conferência reprova quando não há assinatura confirmada.
+
+Custo: o SNS dá 1.000 notificações por e-mail grátis por mês; um relatório
+diário são ~30.
 
 ---
 
