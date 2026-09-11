@@ -19,6 +19,10 @@ name: Verificar guardrails
 on:
   workflow_dispatch:
     inputs:
+      enviar_email:
+        description: "Manda o relatorio por e-mail tambem neste disparo manual"
+        type: boolean
+        default: false
       testar_entrega:
         description: "Forca o alarme de billing 50% para ALARM e volta — manda e-mail DE VERDADE"
         type: boolean
@@ -335,7 +339,12 @@ jobs:
       # ou o backup nao existe. Mandar so quando tudo vai bem seria mandar
       # exatamente quando nao precisa.
       - name: manda o relatorio por e-mail
-        if: always() && github.event_name == 'schedule'
+        # Agendado sempre; manual só quando pedido. O envio precisa ser
+        # exercitável sob demanda: um caminho que só roda às 06:40 e cuja
+        # falha se manifesta como AUSÊNCIA de e-mail é indistinguível de um
+        # dia tranquilo -- exatamente o modo de falha que este workflow existe
+        # para eliminar.
+        if: always() && (github.event_name == 'schedule' || inputs.enviar_email)
         run: |
           set -uo pipefail
 
