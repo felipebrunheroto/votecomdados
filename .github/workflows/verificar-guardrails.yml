@@ -176,6 +176,78 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Quais páginas interessam — a metade da pergunta que a métrica do
+      # CloudWatch não responde, porque ela conta requisição sem saber de quê.
+      #
+      # O log não traz identificação de ninguém (ver infra/acesso.tf): só data,
+      # hora, caminho, status e hit/miss. Isto agrega caminho, que é para o que
+      # ele foi ligado.
+      - name: paginas mais acessadas (7 dias)
+        run: |
+          set -uo pipefail
+
+          CONTA=$(aws sts get-caller-identity --query Account --output text)
+          BALDE="votecomdados-acesso-$CONTA"
+          DESDE=$(date -u -d '7 days ago' +%Y-%m-%d)
+
+          # Filtra pela data que o S3 reporta, em vez de adivinhar o formato do
+          # prefixo que a entrega v2 usa -- ele muda conforme a configuração e
+          # não vale codificar aqui.
+          aws s3 ls "s3://$BALDE/" --recursive 2>/dev/null \
+            | awk -v d="$DESDE" '$1 >= d {print $4}' | head -500 > chaves.txt || true
+
+          if [ ! -s chaves.txt ]; then
+            {
+              echo ""
+              echo "### Páginas mais acessadas (7 dias)"
+              echo ""
+              echo "Sem log no período. O CloudFront entrega em lote — se o"
+              echo "logging foi ligado há pouco, ainda não há arquivo."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          mkdir -p log
+          while read -r chave; do
+            aws s3 cp "s3://$BALDE/$chave" log/ --quiet || true
+          done < chaves.txt
+
+          # O indice de cs-uri-stem vem do cabeçalho `#Fields:`, não de posição
+          # fixa: quem define a ordem é a AWS, não a lista do acesso.tf.
+          gunzip -c log/*.gz 2>/dev/null | awk '
+            /^#Fields:/ {
+              for (i = 2; i <= NF; i++) if ($i == "cs-uri-stem") coluna = i - 1
+              next
+            }
+            /^#/ { next }
+            coluna == 0 { next }
+            {
+              caminho = $coluna
+              if (caminho ~ /^\/_next\//) next
+              if (caminho ~ /\.(js|css|woff2?|ico|png|svg|json|txt|map)$/) next
+              print caminho
+            }
+          ' | sort | uniq -c | sort -rn | head -10 > topo.txt || true
+
+          {
+            echo ""
+            echo "### Páginas mais acessadas (7 dias)"
+            echo ""
+            if [ -s topo.txt ]; then
+              echo "| acessos | página |"
+              echo "|---|---|"
+              while read -r n caminho; do
+                echo "| $n | \`$caminho\` |"
+              done < topo.txt
+              echo ""
+              echo "_Assets excluídos (\`/_next/\`, fontes, ícones): uma visita"
+              echo "carrega dezenas deles e afogaria a lista._"
+            else
+              echo "Arquivos encontrados, mas nenhuma linha de página — pode ser"
+              echo "tráfego só de assets, ou mudança no formato do log."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Isto e o unico passo que MUDA algo, e por isso e opt-in. Forcar o
       # estado e melhor que "gastar de proposito": a metrica de billing so
       # atualiza a cada ~6h, e cruzar 50% de US$170 de verdade custaria
