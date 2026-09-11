@@ -275,7 +275,7 @@ Enquanto vier só `NAO_INFORMADO`, o TSE ainda não julgou.
 
 ## 4.2 Quantas pessoas visitam o site
 
-O workflow **Verificar guardrails** publica, junto da checagem semanal, as
+O workflow **Verificar guardrails** publica, junto da checagem diária, as
 requisições do CloudFront por dia nos últimos 7 dias.
 
 **Requisição não é visita.** Uma página estática carrega o HTML mais vários
