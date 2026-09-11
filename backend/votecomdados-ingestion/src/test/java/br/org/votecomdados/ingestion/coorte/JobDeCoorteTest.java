@@ -117,10 +117,10 @@ class JobDeCoorteTest {
         // SeletorDeJob garante.
         job.carregarAno(execucao, linhas(
             candidatura("900000000012", 2026, "6", "SP", "JOAO PEREIRA LIMA",
-                        "JOAO LIMA", "55566677788")));
+                        "JOAO LIMA", "10000001090")));
         job.carregarAno(execucao, linhas(
             candidatura("900000000011", 2022, "6", "SP", "JOAO PEREIRA LIMA",
-                        "JOAO LIMA", "55566677788")));
+                        "JOAO LIMA", "10000001090")));
 
         job.encerrar();
 
@@ -146,7 +146,7 @@ class JobDeCoorteTest {
         // Primeira execução: só 2026, e o expurgo ao fim.
         job.carregarAno(execucao, linhas(
             candidatura("900000000031", 2026, "6", "SP", "CARLA MENDES DE SOUZA",
-                        "CARLA MENDES", "12312312312")));
+                        "CARLA MENDES", "10000000442")));
         job.encerrar();
 
         assertThat(jdbc.sql("SELECT count(*) FROM politico WHERE cpf_hmac IS NOT NULL")
@@ -158,10 +158,10 @@ class JobDeCoorteTest {
         // civil diferente — só o CPF pode ligar os dois.
         job.carregarAno(execucao, linhas(
             candidatura("900000000031", 2026, "6", "SP", "CARLA MENDES DE SOUZA",
-                        "CARLA MENDES", "12312312312")));
+                        "CARLA MENDES", "10000000442")));
         job.carregarAno(execucao, linhas(
             candidatura("900000000032", 2022, "6", "SP", "CARLA M. DE SOUZA LIMA",
-                        "CARLA MENDES", "12312312312")));
+                        "CARLA MENDES", "10000000442")));
         job.encerrar();
 
         assertThat(contar("politico"))
@@ -188,7 +188,7 @@ class JobDeCoorteTest {
     void candidato_desconhecido_cai_no_ultimo_recurso_sem_estourar() {
         job.carregarAno(execucao, linhas(
             candidatura("900000000041", 2026, "6", "SP", "PESSOA DA COORTE",
-                        "PESSOA COORTE", "11111111111")));
+                        "PESSOA COORTE", "10000000361")));
 
         // Desconhecido, CPF que nao casa com ninguem, E SEM DATA DE
         // NASCIMENTO. Os tres juntos eram o gatilho: sem data, o parametro ia
@@ -199,7 +199,7 @@ class JobDeCoorteTest {
         assertThatCode(() -> job.carregarAno(execucao, linhas(
             semNascimento(candidatura("900000000042", 2026, "11", "SP",
                                       "DESCONHECIDO SEM DATA", "DESCONHECIDO",
-                                      "22222222222")))))
+                                      "10000000523")))))
             .doesNotThrowAnyException();
 
         assertThat(contar("politico"))
@@ -220,14 +220,14 @@ class JobDeCoorteTest {
     void ano_anterior_sem_dono_nao_escreve_nada() {
         job.carregarAno(execucao, linhas(
             candidatura("900000000051", 2026, "6", "SP", "QUEM ESTA NA COORTE",
-                        "NA COORTE", "44455566677")));
+                        "NA COORTE", "10000000876")));
 
         long stagingAntes = jdbc.sql("SELECT count(*) FROM staging.payload_bruto")
             .query(Long.class).single();
 
         var r = job.carregarAno(execucao, linhas(
             candidatura("900000000052", 2016, "11", "SP", "GENTE DE OUTRA ELEICAO",
-                        "OUTRA", "77788899900")));
+                        "OUTRA", "10000001252")));
 
         assertThat(r.processados()).as("nada processado").isZero();
         assertThat(r.rejeitados()).as("nao e rejeicao: o dado nao tem defeito").isZero();
@@ -255,7 +255,7 @@ class JobDeCoorteTest {
         // Primeira execução: cria a pessoa e expurga a âncora.
         job.carregarAno(execucao, linhas(
             candidatura("900000000061", 2026, "6", "SP", "NOME COMO O TSE GRAFOU",
-                        "FULANO", "45645645645")));
+                        "FULANO", "10000000957")));
         job.encerrar();
 
         // Uma segunda pessoa com o MESMO CPF, grafia diferente, E COM
@@ -279,10 +279,10 @@ class JobDeCoorteTest {
         assertThatCode(() -> {
             job.carregarAno(execucao, linhas(
                 candidatura("900000000061", 2026, "6", "SP", "NOME COMO O TSE GRAFOU",
-                            "FULANO", "45645645645")));
+                            "FULANO", "10000000957")));
             job.carregarAno(execucao, linhas(
                 candidatura("900000000062", 2026, "6", "SP", "NOME COM OUTRA GRAFIA",
-                            "OUTRO", "45645645645")));
+                            "OUTRO", "10000000957")));
             job.encerrar();
         }).doesNotThrowAnyException();
 
@@ -301,7 +301,7 @@ class JobDeCoorteTest {
     void encerrar_recusa_podar_quando_o_ano_da_coorte_nao_entrou() {
         job.carregarAno(execucao, linhas(
             candidatura("900000000021", 2022, "6", "SP", "ANA RIBEIRO COSTA",
-                        "ANA COSTA", "99988877766")));
+                        "ANA COSTA", "10000001414")));
 
         assertThatThrownBy(() -> job.encerrar())
             .isInstanceOf(IllegalStateException.class)
@@ -328,9 +328,9 @@ class JobDeCoorteTest {
     void quem_nao_e_candidato_em_2026_e_podado_com_todo_o_historico() {
         job.carregarAno(execucao, linhas(
             candidatura("900000000011", 2026, "6", "SP", "BELTRANA QUE FICOU",
-                        "BELTRANA", "33344455566"),
+                        "BELTRANA", "10000000795"),
             candidatura("900000000010", 2022, "6", "SP", "FULANO QUE SAIU",
-                        "FULANO", "22233344455")));
+                        "FULANO", "10000000604")));
 
         assertThat(contar("politico"))
             .as("FULANO nem entra: 2022 so anexa a quem ja esta na base")
@@ -359,7 +359,7 @@ class JobDeCoorteTest {
     void o_expurgo_apaga_o_cpf_hmac_ao_fim() {
         job.carregarAno(execucao, linhas(
             candidatura("900000000020", 2026, "6", "SP", "CICLANA DE TESTE",
-                        "CICLANA", "44455566677")));
+                        "CICLANA", "10000000876")));
 
         assertThat(contar("politico WHERE cpf_hmac IS NOT NULL"))
             .as("durante o job o HMAC precisa existir para costurar").isEqualTo(1);
@@ -378,7 +378,7 @@ class JobDeCoorteTest {
     @Test
     void reexecutar_depois_do_expurgo_nao_duplica_ninguem() {
         var linha = candidatura("900000000030", 2026, "6", "SP", "DELTRANO DE TESTE",
-                                "DELTRANO", "55566677788");
+                                "DELTRANO", "10000001090");
 
         job.carregarAno(execucao, linhas(linha));
         job.encerrar();
@@ -396,7 +396,7 @@ class JobDeCoorteTest {
     @Test
     void status_de_registro_e_preservado_inclusive_indeferido() {
         var indeferida = candidatura("900000000040", 2026, "6", "SP", "EX-CANDIDATO",
-                                     "EX", "66677788899");
+                                     "EX", "10000001171");
         ((tools.jackson.databind.node.ObjectNode) indeferida)
             .put("DS_SITUACAO_CANDIDATURA", "INDEFERIDO");
 
@@ -411,7 +411,7 @@ class JobDeCoorteTest {
     void eleicao_que_ainda_nao_ocorreu_nao_diz_que_a_pessoa_perdeu() {
         job.carregarAno(execucao, linhas(
             candidatura("900000000050", 2026, "6", "SP", "CANDIDATA DE 2026",
-                        "CANDIDATA", "77788899900")));
+                        "CANDIDATA", "10000001252")));
 
         var eleito = jdbc.sql("SELECT eleito FROM candidatura").query(Boolean.class).optional();
         assertThat(eleito).as("false diria que perdeu; nulo diz que ainda nao se sabe")
@@ -421,7 +421,7 @@ class JobDeCoorteTest {
     @Test
     void cargo_desconhecido_vai_para_quarentena_em_vez_de_sumir() {
         var estranha = candidatura("900000000060", 2026, "99", "SP", "CARGO INVENTADO",
-                                   "CARGO", "88899900011");
+                                   "CARGO", "10000001333");
 
         var r = job.carregarAno(execucao, linhas(estranha));
 
@@ -436,17 +436,38 @@ class JobDeCoorteTest {
      */
     @Test
     void hmac_do_java_bate_com_o_do_postgres() {
-        String noJava = hmac.hmacDe("111.222.333-44");
+        String noJava = hmac.hmacDe("111.444.777-35");
         String noBanco = jdbc.sql("""
-                SELECT encode(hmac('11122233344', :pepper, 'sha256'), 'hex')
+                SELECT encode(hmac('11144477735', :pepper, 'sha256'), 'hex')
                 """).param("pepper", "pepper-de-teste").query(String.class).single();
 
         assertThat(noJava).isEqualTo(noBanco).hasSize(64);
     }
 
+    /**
+     * Campo mal preenchido não pode virar identidade.
+     *
+     * <p>Em 11/09/2026 três linhas do pacote do TSE — um senador e seus dois
+     * suplentes — traziam um único dígito neste campo. O preenchimento com
+     * zeros as transformava em "10000000019", e as três recebiam a MESMA
+     * âncora: na mesma execução teriam virado uma pessoa só, com a atuação
+     * das três.
+     */
+    @Test
+    void lixo_no_campo_de_cpf_nao_vira_ancora() {
+        assertThat(hmac.hmacDe("4")).as("um digito solto").isNull();
+        assertThat(hmac.hmacDe("#NE")).as("sentinela do TSE").isNull();
+        assertThat(hmac.hmacDe("00000000000")).as("sequencia repetida").isNull();
+        assertThat(hmac.hmacDe("11122233344")).as("11 digitos, verificador errado").isNull();
+        assertThat(hmac.hmacDe("11144477735")).as("CPF valido segue ancorando").isNotNull();
+    }
+
     @Test
     void cpf_sem_zeros_a_esquerda_produz_o_mesmo_hmac() {
-        assertThat(hmac.hmacDe("1122233344")).isEqualTo(hmac.hmacDe("01122233344"));
+        // CPF que COMEÇA com zero, e válido nos dígitos verificadores: é o
+        // caso real que o preenchimento existe para salvar. Um número
+        // inventado não serve mais — o cálculo agora confere o verificador.
+        assertThat(hmac.hmacDe("1234567890")).isEqualTo(hmac.hmacDe("01234567890"));
     }
 
     // ------------------------------------------------- contra o arquivo real
@@ -522,7 +543,7 @@ class JobDeCoorteTest {
             .doesNotContain("NR_CPF_CANDIDATO")
             .doesNotContain("NR_TITULO_ELEITORAL_CANDIDATO")
             .doesNotContain("DS_EMAIL")
-            .doesNotContain("11111111100");
+            .doesNotContain("10000000280");
     }
 
     /**

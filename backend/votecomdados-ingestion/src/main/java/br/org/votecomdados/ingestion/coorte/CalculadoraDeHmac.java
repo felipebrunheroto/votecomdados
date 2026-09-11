@@ -52,6 +52,31 @@ public class CalculadoraDeHmac {
     }
 
     /**
+     * O CPF carrega dois dígitos verificadores, e é isso que separa um número
+     * de verdade de um campo mal preenchido.
+     *
+     * <p>A recusa de sequências repetidas ({@code 00000000000},
+     * {@code 11111111111}) é parte da regra, não zelo extra: elas passam no
+     * cálculo dos verificadores e são justamente a forma que o lixo costuma
+     * tomar depois do preenchimento com zeros.
+     */
+    private static boolean digitoVerificadorConfere(String d) {
+        if (d.length() != 11) return false;
+        if (d.chars().distinct().count() == 1) return false;
+
+        for (int posicao : new int[] {9, 10}) {
+            int soma = 0;
+            for (int i = 0; i < posicao; i++) {
+                soma += (d.charAt(i) - '0') * (posicao + 1 - i);
+            }
+            int resto = soma % 11;
+            int esperado = resto < 2 ? 0 : 11 - resto;
+            if (d.charAt(posicao) - '0' != esperado) return false;
+        }
+        return true;
+    }
+
+    /**
      * @param cpf com ou sem pontuação; só os dígitos entram no cálculo
      * @return 64 caracteres hex, ou {@code null} se o CPF vier vazio da fonte
      */
@@ -65,6 +90,23 @@ public class CalculadoraDeHmac {
         if (digitos.length() < 11) {
             digitos = "0".repeat(11 - digitos.length()) + digitos;
         }
+
+        // Depois de completar, CONFERIR. O preenchimento acima existe para
+        // recuperar zero à esquerda perdido, mas ele não distingue isso de
+        // lixo: em 11/09/2026 três linhas do pacote do TSE — um senador e seus
+        // dois suplentes — traziam neste campo um único dígito, "4". Viraram
+        // "00000000004" e receberam a MESMA âncora de identidade.
+        //
+        // Elas não chegaram a se fundir por acaso, porque entraram em
+        // execuções diferentes. Na mesma execução teriam virado uma pessoa só,
+        // com a atuação das três — o pior erro que esta plataforma pode
+        // cometer, e em silêncio.
+        //
+        // Sem âncora a resolução cai no nome civil + nascimento, que é mais
+        // fraco mas honesto. Ancorar em CPF inválido não é mais forte: é
+        // errado com aparência de forte.
+        if (!digitoVerificadorConfere(digitos)) return null;
+
         try {
             Mac mac = Mac.getInstance(ALGORITMO);
             mac.init(new SecretKeySpec(pepper, ALGORITMO));
