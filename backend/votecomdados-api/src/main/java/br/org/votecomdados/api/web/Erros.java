@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.stream.Stream;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Envelope único de erro: `{"error": {"code", "message"}}`, conforme
@@ -90,6 +91,27 @@ public class Erros {
     ResponseEntity<Envelope> requisicaoInvalida(Exception e) {
         return ResponseEntity.badRequest()
             .body(Envelope.de("BAD_REQUEST", e.getMessage()));
+    }
+
+    /**
+     * Caminho que não casa com nenhum controlador.
+     *
+     * Caía no catch-all abaixo e virava 500 — a terceira vez neste arquivo em
+     * que erro de quem chama era reportado como falha nossa. Aqui a
+     * consequência passa do cosmético: o alarme `votecomdados-5xx-sustentado`
+     * dispara com mais de 10 respostas 5xx por janela de cinco minutos em três
+     * janelas seguidas, e uma varredura automática sondando `/.env` ou
+     * `/wp-login.php` atinge isso em segundos. O alarme que deveria dizer "a
+     * aplicação quebrou" passaria a dizer "alguém apontou um scanner para
+     * nós", e quem recebe aprende a ignorá-lo.
+     *
+     * Também não se registra ERROR com pilha: sondagem de rota não é
+     * incidente, e o volume de log de uma varredura é grande.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<Envelope> rotaInexistente(NoResourceFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(Envelope.de("NOT_FOUND", "Recurso não encontrado."));
     }
 
     @ExceptionHandler(Exception.class)
