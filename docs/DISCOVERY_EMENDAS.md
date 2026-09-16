@@ -84,7 +84,7 @@ não depende de navegador.
 
 ---
 
-## 3. Os três problemas de vínculo — medidos, não estimados
+## 3. Os problemas de vínculo — medidos, não estimados
 
 ### 3.1 Só 5% da nossa base pode ter emenda
 
@@ -106,27 +106,24 @@ Isso não inviabiliza a funcionalidade, mas define o desenho: a informação é
 seria ruído. O certo é a seção só existir quando houver dado, como já
 fazemos com votações para quem não tem mandato.
 
-### 3.2 O código de autor não é o nosso
+### 3.2 O código de autor: resolvido — e é o cenário bom
 
-O campo `autor` é um código — ✅ a consulta pública do Portal usa formas
-como `Autor: 8100`, que não tem a ordem de grandeza dos ids da Câmara
-(~204554) nem dos do Senado.
+✅ **`nomeAutor` traz o código embutido no próprio nome**, no formato
+`"4290 - ABILIO BRUNINI"`. E `codigoEmenda` é composto: `202442900001` =
+ano `2024` + autor `4290` + sequência `00001`.
 
-❓ **A que sistema esse código pertence é a principal incógnita do
-discovery.** Duas saídas:
+Ou seja, o código de autor é **estável e estruturante** dentro do Portal —
+não é um rótulo solto. Não é o id da Câmara (~204554) nem do Senado, mas é
+um identificador consistente, e o par `(código, nome)` vem em toda linha.
 
-- **Se for um código estável e mapeável**, vira mais uma linha em
-  `identificador_externo` com um novo valor de `fonte_enum`, e o vínculo é
-  determinístico. Cenário bom.
-- **Se não for**, sobra casar por `nomeAutor` — texto livre, com homônimos,
-  nomes parlamentares e grafias variantes. Seria reusar a máquina de
-  resolução de identidade do COORTE (`RepositorioDeCoorte`, score de
-  confiança, `metodo_resolucao = FUZZY`, curadoria manual do que ficar
-  abaixo do limiar). Funciona — já funciona hoje —, mas é o caminho caro, e
-  traz de volta o trabalho de curadoria.
+O vínculo então é feito **uma vez, para ~1.066 pessoas**, e daí em diante é
+determinístico: entra em `identificador_externo` com um novo valor de
+`fonte_enum` (algo como `PORTAL_TRANSPARENCIA`), exatamente como já fazemos
+com Câmara e Senado. O casamento inicial usa nome + UF + partido, com a
+máquina de resolução do COORTE e curadoria do que ficar abaixo do limiar —
+mas é trabalho **de uma vez só**, não a cada ingestão.
 
-Com 1.066 pessoas o problema é tratável nos dois cenários. Não é o caso de
-20 mil.
+Isto era a incógnita que decidia "dias ou semanas". A resposta é **dias**.
 
 ### 3.3 Não temos código de município
 
@@ -146,6 +143,42 @@ IBGE. É trabalho pequeno e útil além desta funcionalidade — o próprio
 `municipio` atual já está sujeito ao mesmo problema.
 
 ---
+
+### 3.4 Boa parte do dinheiro não tem cidade — o achado decisivo
+
+✅ `localidadeDoGasto` assume pelo menos quatro formas, confirmadas por duas
+fontes independentes:
+
+| valor | significa |
+|---|---|
+| `"ITAMARAJU - BA"` | município — **o único caso atribuível a uma cidade** |
+| `"BAHIA (UF)"` | o estado inteiro |
+| `"Nacional"` | sem recorte territorial |
+| `"Múltiplo"` | várias localidades numa linha só, sem discriminar |
+
+**Só a primeira forma responde à pergunta original.** As outras três existem
+em volume — e uma emenda `"Múltiplo"` não é divisível pela API: o rateio
+entre as cidades simplesmente não é publicado nesse endpoint.
+
+❓ **A fração de cada forma é a medição mais importante do spike** — e a que
+importa não é fração de linhas, é **fração de dinheiro**. Se metade do valor
+pago vier como `Múltiplo` ou `Nacional`, então "quanto foi para a sua
+cidade" não é uma pergunta que esta fonte responde por inteiro, e a página
+tem que **declarar a lacuna** em vez de mostrar um total que parece
+completo. Silêncio aqui viraria subnotificação com cara de fato.
+
+O script `tools/spike-emendas.py` mede exatamente isso.
+
+### 3.5 Os valores vêm como texto brasileiro
+
+✅ `valorPago` chega como `"2.359.960,00"` — string, com ponto de milhar e
+vírgula decimal. `float("2.359.960,00")` estoura; pior, um parsing
+descuidado com `try/except` devolvendo `0` transforma **R$ 2,3 milhões em
+zero silencioso**.
+
+Zero indistinguível de "não há dado" é precisamente o tipo de número errado
+que esta plataforma não pode publicar. O spike já trata isso: converte, e
+devolve **ausência** — nunca zero — quando não consegue.
 
 ## 4. Duas assimetrias que precisam de decisão
 
@@ -188,19 +221,30 @@ ingestão; a pergunta passa a ser do eleitor sobre o próprio município, que
 
 ---
 
-## 6. Recomendação
+## 6. Estado do spike
 
-**Um spike de um dia, antes de comprometer qualquer coisa**, para fechar as
-três incógnitas ❓ que decidem o tamanho do trabalho:
+O script está pronto: **`tools/spike-emendas.py`**. A lógica de parsing já
+foi testada contra os valores reais observados (`"2.359.960,00"` →
+`2359960.0`; lixo → ausência, nunca zero) e contra as quatro formas de
+localidade.
 
-1. Cadastrar a chave e medir **volume e tamanho de página** de um ano.
-2. Descobrir **o que é o campo `autor`** — determinístico ou fuzzy define se
-   o esforço é de dias ou de semanas.
-3. Amostrar `localidadeDoGasto` e ver **em que formato** vem o município.
+**Falta a chave da API** — é gratuita, sai por cadastro de e-mail em
+`portaldatransparencia.gov.br/api-de-dados/cadastrar-email`, e leva um
+minuto. Com ela:
 
-Com essas três respostas o dimensionamento deixa de ser chute. Sem elas,
-qualquer estimativa que eu desse aqui seria inventada.
+```bash
+export PORTAL_TRANSPARENCIA_TOKEN='...'
+python3 tools/spike-emendas.py --ano 2025
+```
 
-Duas coisas que valem independentemente do resultado: a tabela de
-correspondência de municípios e a decisão de enquadramento do §5 — essa
-segunda é sua, e é a que mais muda o produto.
+O token é lido do ambiente e nunca é impresso. Se a funcionalidade for
+adiante, o lugar dele é o Secrets Manager, como o pepper do CPF.
+
+Das três incógnitas originais, **uma já caiu**: o campo `autor` é
+estruturado e estável, então o vínculo é trabalho de dias, não de semanas.
+Restam o volume e — a que de fato decide — **a fração do dinheiro que tem
+cidade**.
+
+Duas coisas independem do spike: a tabela de correspondência de municípios
+(§3.3) e o enquadramento do §5. Essa segunda é sua, e é a que mais muda o
+produto.
