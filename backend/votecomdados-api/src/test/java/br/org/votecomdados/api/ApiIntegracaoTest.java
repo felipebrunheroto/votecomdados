@@ -172,6 +172,28 @@ class ApiIntegracaoTest {
         assertThat(erro.get("code")).isEqualTo("NOT_FOUND");
     }
 
+    /**
+     * Caminho que não existe é erro de quem chama, não falha nossa.
+     *
+     * Devolver 500 aqui não é detalhe cosmético: o alarme
+     * `votecomdados-5xx-sustentado` dispara com mais de 10 respostas 5xx por
+     * janela de cinco minutos, em três janelas seguidas. Qualquer varredura
+     * automática sondando `/.env` ou `/wp-login.php` — coisa que acontece com
+     * qualquer domínio público — produz isso em segundos, e o alarme que
+     * deveria significar "a aplicação quebrou" passa a significar "alguém
+     * apontou um scanner para nós".
+     *
+     * Cada uma dessas respostas também gravava ERROR com pilha inteira no log.
+     */
+    @Test
+    void rota_inexistente_devolve_404_e_nao_500() {
+        var r = obterEntidade("/api/v1/naoexiste");
+
+        assertThat(r.getStatusCode().value()).isEqualTo(404);
+        var erro = (Map<String, Object>) r.getBody().get("error");
+        assertThat(erro.get("code")).isEqualTo("NOT_FOUND");
+    }
+
     @Test
     void votacoes_preservam_o_rotulo_original_da_fonte() {
         var r = obter("/api/v1/politicos/" + COM_ATUACAO + "/votacoes");
