@@ -14,6 +14,73 @@ resource "aws_s3_bucket_versioning" "frontend" {
   versioning_configuration { status = "Enabled" }
 }
 
+# O versionamento acima protege contra publicação ruim -- dá para voltar um
+# objeto. Ele não vinha com prazo, e sem prazo vira acervo: o bucket do log e o
+# da ingestão já tinham regra de expiração, este ficou de fora.
+#
+# O custo disso não é teórico. Cada deploy do frontend escreve 294.701 objetos
+# (250.175 proposições, 41.015 votações, 3.470 perfis), e o cron reconstrói 5 a
+# 7 vezes por dia -- uma vez para cada fonte que termina de ingerir. O
+# `aws s3 sync` compara tamanho e data de modificação, e um `next build` novo
+# regenera tudo com mtime nova; então TODOS os 294.701 são reenviados, mesmo os
+# que não mudaram. Uma proposição de 2015 ganha cinco versões por dia.
+#
+# Sem esta regra, nenhuma dessas versões expira. A conta de armazenamento sobe
+# para sempre, sem o site mudar.
+#
+# 7 dias: mesma janela da retenção de backup do RDS. É o tempo em que alguém
+# ainda pode querer desfazer uma publicação; depois disso, a forma de voltar é
+# reconstruir a partir do dado, não desenterrar um objeto.
+#
+# Isto ataca o armazenamento, não as requisições PUT -- que provavelmente são o
+# item maior. Para essas, as alavancas são reconstruir menos vezes e
+# pré-renderizar menos páginas, ambas decisões ainda em aberto.
+resource "aws_s3_bucket_lifecycle_configuration" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  # Só versões NÃO-CORRENTES. A versão atual de todo objeto fica intacta --
+  # inclusive a de `dados-abertos/<data>/`, que é endereço de citação imutável
+  # (FRONTEND.md § 9) e que o `sync --delete` já preserva por `--exclude`.
+  rule {
+    id     = "expira-versoes-antigas"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+
+  # Quando o `sync --delete` remove um objeto, o versionamento deixa um
+  # marcador de exclusão para trás. Expirada a última versão não-corrente, o
+  # marcador fica sozinho, sem apontar para nada -- e ainda conta como objeto.
+  rule {
+    id     = "remove-marcador-de-exclusao-orfao"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+  }
+
+  # Upload multipart interrompido não aparece na listagem e é cobrado. Um
+  # deploy que morre no meio -- já aconteceu aqui, com credencial expirada --
+  # deixa exatamente isso.
+  rule {
+    id     = "aborta-upload-incompleto"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket                  = aws_s3_bucket.frontend.id
   block_public_acls       = true
