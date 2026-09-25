@@ -295,20 +295,38 @@ jobs:
           # record_fields, isto acompanha em vez de passar a contar errado.
           awk '
             /^#Fields:/ {
-              for (i = 2; i <= NF; i++) if ($i == "cs-uri-stem") coluna = i - 1
+              for (i = 2; i <= NF; i++) {
+                if ($i == "cs-uri-stem") coluna = i - 1
+                if ($i == "sc-status")   status = i - 1
+              }
               next
             }
             /^#/ { next }
             coluna == 0 && $0 ~ /cs-uri-stem/ {
-              for (i = 1; i <= NF; i++) if ($i == "cs-uri-stem") coluna = i
+              for (i = 1; i <= NF; i++) {
+                if ($i == "cs-uri-stem") coluna = i
+                if ($i == "sc-status")   status = i
+              }
               next
             }
             {
               if (coluna == 0) coluna = 3
+              if (status == 0) status = 4
               caminho = $coluna
               if (caminho == "" || caminho !~ /^\//) next
               if (caminho ~ /^\/_next\//) next
               if (caminho ~ /\.(js|css|woff2?|ico|png|svg|json|txt|map)$/) next
+              # So conta pagina realmente servida. Sem isto, a lista mede quem
+              # esta varrendo, nao o que interessa a quem le: em 25/09/2026 as
+              # sondas de `.env` ocupavam oito das dez linhas. Elas continuam
+              # no log -- e devem continuar --, mas agora com 404, e 404 nao e
+              # pagina que interessou a ninguem.
+              #
+              # 304 entra junto com os 2xx: significa que a pessoa PEDIU a
+              # pagina e o navegador revalidou o cache. E leitura, e descartar
+              # subnotifica justamente quem volta ao site. Redirecionamento
+              # (301/302) fica de fora -- e salto, nao leitura.
+              if ($status !~ /^2[0-9][0-9]$/ && $status != 304) next
               print caminho
             }
           ' cru/tudo.txt | sort | uniq -c | sort -rn | head -10 > topo.txt || true
@@ -325,7 +343,8 @@ jobs:
               done < topo.txt
               echo ""
               echo "_Assets excluídos (\`/_next/\`, fontes, ícones): uma visita"
-              echo "carrega dezenas deles e afogaria a lista._"
+              echo "carrega dezenas deles e afogaria a lista. Só contam"
+              echo "respostas 2xx e 304: sondagem leva 404 e não entra._"
             else
               echo "Arquivos encontrados, mas nenhuma linha de página — pode ser"
               echo "tráfego só de assets, ou mudança no formato do log."
