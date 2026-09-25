@@ -270,6 +270,59 @@ alguém chega nessas páginas.
 
 Enquanto isso não acontece, não há pressa: o custo líquido é zero.
 
+## Custo da funcionalidade de emendas (projeção, 25/09/2026)
+
+A funcionalidade foi aprovada para construção. A projeção abaixo parte dos
+números medidos na seção anterior, não de estimativa nova.
+
+### O que ela acrescenta é barato
+
+| item | PUT/mês | custo |
+|---|---:|---:|
+| páginas das 474 cidades com dado | +21 mil | **US$ 0,11** |
+| ou: páginas dos 5.570 municípios | +252 mil | **US$ 1,26** |
+| tabela `emenda` no RDS (~6,3 mil linhas/ano) | — | desprezível |
+| ingestão diária da API da CGU (421 páginas) | — | ~3 min a mais de Fargate |
+
+A API do Portal da Transparência é gratuita, com teto de 400 req/min. Nada
+disso move o orçamento.
+
+### O que não é óbvio, e é 35× maior
+
+**O caro não é a fonte nova — é o rebuild que ela dispara.**
+
+O deploy do frontend reconstrói quando o watermark de `/meta/status` muda, e
+hoje isso acontece **1,51 vez por dia** com quatro fontes. Se a ingestão de
+emendas concluir num horário próprio, ela vira uma quinta mudança de
+watermark e provoca **mais uma reconstrução completa dos 294.701 objetos**:
+
+```
++294.701 objetos × 30 dias  =  +8,8 milhões de PUT/mês  =  +US$ 44,21/mês
+```
+
+Contra **US$ 1,26** das páginas da própria funcionalidade. A fonte nova custa
+centavos; o rebuild que ela dispara custa 35 vezes mais que ela.
+
+### Duas decisões de implementação que decorrem disso
+
+**1. A ingestão de emendas roda dentro da janela das fontes existentes**
+(02:00–07:30), não em horário próprio. O watermark muda uma vez, não duas.
+Emenda não é dado de minuto — atraso de algumas horas é irrelevante para o
+leitor e vale US$ 44/mês.
+
+**2. Pré-renderizar só as 474 cidades com dado**, não os 5.570 municípios.
+As outras 5.096 páginas seriam idênticas — a mesma tela de "nenhuma emenda
+identificada" — e chegam pelo fallback de cliente, que passou a funcionar
+com a correção de roteamento de 25/09/2026. Economiza 90% das páginas novas
+sem perder nada: página vazia não tem o que indexar.
+
+### E reforça a decisão de ~02/10
+
+Esta projeção torna o número da seção anterior mais concreto: enquanto cada
+publicação escrever 294.701 objetos, **qualquer** fonte ou página nova herda
+esse custo multiplicado. Cortar o pré-render de proposições e votações não
+economiza só os US$ 67/mês de hoje — barateia tudo que vier depois.
+
 ## Resumo
 
 | | Total (45 dias) |

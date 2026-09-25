@@ -39,3 +39,6 @@ consulta_cand_*
 # projeto. NUNCA versionar: o repositorio e publico, e o arquivo guarda a
 # chave em claro. Nao commitar nem alterar este arquivo.
 docs/dados-api.md
+
+# Bytecode do spike de emendas.
+tools/__pycache__/
