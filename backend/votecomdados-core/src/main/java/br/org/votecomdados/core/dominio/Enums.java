@@ -85,7 +85,27 @@ public final class Enums {
         NAO_INFORMADO, DEFERIDO, INDEFERIDO, CASSADO, RENUNCIA, APTO, INAPTO
     }
 
-    public enum Fonte { CAMARA, SENADO, TSE, ALESP }
+    /**
+     * PORTAL_TRANSPARENCIA é a API de Dados da CGU, de onde vêm as emendas
+     * parlamentares. Diferente das outras quatro, ela exige chave de acesso e
+     * não publica pacote em massa: o CDN responde 403 a cliente automatizado,
+     * a mesma barreira do TSE.
+     */
+    public enum Fonte { CAMARA, SENADO, TSE, ALESP, PORTAL_TRANSPARENCIA }
+
+    /**
+     * Em que recorte territorial a emenda foi registrada.
+     *
+     * <p>Não é detalhe de catalogação: é a medida de quanto a fonte NÃO diz.
+     * Sobre o ano de 2025 inteiro, por valor pago, {@link #MULTIPLO} responde
+     * por 88,5% do dinheiro e {@link #MUNICIPIO} por 3,4%. Uma página que
+     * some tudo sem separar por este campo afirma cobertura que não tem.
+     *
+     * <p>{@link #MULTIPLO} são várias localidades numa linha só, sem
+     * discriminar quanto coube a cada uma, e não é decomponível: o endpoint de
+     * documentos da emenda devolve apenas número de empenho, sem localidade.
+     */
+    public enum LocalidadeEmenda { MUNICIPIO, ESTADO, NACIONAL, MULTIPLO, OUTRO }
 
     /**
      * COORTE define QUEM interessa (candidatos de 2026) e é pré-requisito dos

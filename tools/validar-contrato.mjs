@@ -113,6 +113,9 @@ const PARES = [
   ["tipo_job_enum", "TipoJob", null],
   ["motivo_rejeicao_enum", "MotivoRejeicao", null],
   ["metodo_resolucao_enum", "MetodoResolucao", null],
+  // TS null por ora: a ingestão classifica a localidade, mas nenhuma rota da
+  // API a expõe ainda. Vira "LocalidadeEmenda" no PR do frontend.
+  ["localidade_emenda_enum", "LocalidadeEmenda", null],
 ];
 
 const problemas = [];
