@@ -224,3 +224,45 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
             --paths "/*"
+
+      # A verificação que faltava.
+      #
+      # Em 25/09/2026 descobrimos que `/sobre/` e `/dados-abertos/` serviam a
+      # casca do 404 havia semanas: o deploy passava verde porque conferia o
+      # watermark e a API, nunca uma PÁGINA. Checar só o código HTTP também
+      # não bastaria -- todas devolviam 200, esse era exatamente o problema.
+      # Por isso aqui se afirma o CONTEÚDO.
+      - name: as páginas realmente abrem?
+        run: |
+          set -uo pipefail
+          SITE="https://${{ vars.SITE_DOMINIO || 'votecomdados.com.br' }}"
+          falhou=0
+
+          # A invalidação é assíncrona; dá uma folga antes de medir.
+          sleep 30
+
+          conferir() {   # caminho, trecho que precisa existir no corpo
+            corpo="$(curl -fsS --max-time 30 "$SITE$1" || true)"
+            if printf '%s' "$corpo" | grep -qF "$2"; then
+              echo "  ok    $1"
+            else
+              echo "::error::$1 nao trouxe \"$2\" — pagina servindo casca ou quebrada"
+              falhou=1
+            fi
+          }
+
+          conferir "/"        "VoteComDados"
+          conferir "/sobre/"  "Sobre os dados"
+
+          # Sondagem tem de receber 404 de verdade. 200 aqui significa que a
+          # função de roteamento saiu do ar, e todo scanner volta a ser
+          # informado de que cada caminho existe.
+          cod="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$SITE/.env")"
+          if [ "$cod" = "404" ]; then
+            echo "  ok    /.env -> 404"
+          else
+            echo "::error::/.env devolveu $cod, esperado 404"
+            falhou=1
+          fi
+
+          exit $falhou

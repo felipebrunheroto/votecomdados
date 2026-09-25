@@ -85,6 +85,17 @@ resource "aws_s3_bucket_policy" "frontend" {
 # métrica de CloudWatch conta requisição, não diz QUAL página. O segundo
 # perdeu força quando a pergunta deixou de ser "auditar acesso" e passou a ser
 # "quais páginas interessam" — que se responde agregando, não revisando.
+# Roteamento de diretório + 404 real para sondagem. O porquê de cada regra
+# está no cabeçalho de `funcoes/roteamento.js` — resumo: `default_root_object`
+# só vale para a raiz, então sem esta função nenhuma subpágina era servida.
+resource "aws_cloudfront_function" "roteamento" {
+  name    = "votecomdados-roteamento"
+  runtime = "cloudfront-js-2.0"
+  comment = "Resolve /pagina/ para /pagina/index.html e devolve 404 real para sondagem"
+  publish = true
+  code    = file("${path.module}/funcoes/roteamento.js")
+}
+
 # trivy:ignore:AWS-0011
 # trivy:ignore:AWS-0010
 resource "aws_cloudfront_distribution" "frontend" {
@@ -102,9 +113,15 @@ resource "aws_cloudfront_distribution" "frontend" {
   default_cache_behavior {
     target_origin_id       = "s3-frontend"
     viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.roteamento.arn
+    }
+
+    allowed_methods = ["GET", "HEAD"]
+    cached_methods  = ["GET", "HEAD"]
+    compress        = true
 
     # Cache primário na borda, TTL de 1 dia — decisão de arquitetura (ver
     # ARQUITETURA.md § 7 "Por que não há cache in-memory atrás da API").
