@@ -39,7 +39,7 @@ BASE = "https://api.portaldatransparencia.gov.br/api-de-dados/emendas"
 # 400 req/min no horario normal, 700 entre 00h e 06h. Ficamos MUITO abaixo:
 # um spike que derruba o limite do token queima o acesso de todo mundo que
 # usa a mesma chave, e o Portal suspende sem aviso.
-PAUSA_ENTRE_PAGINAS = 0.25
+PAUSA_ENTRE_PAGINAS = 0.4
 
 
 def buscar(token, ano, pagina):
@@ -65,11 +65,19 @@ def valor(bruto):
     t = str(bruto).strip()
     if not t:
         return None
+    # Negativo vem como "- 26.002,00" -- sinal SEPARADO do numero por espaco.
+    # Visto na PRIMEIRA linha real que a API devolveu (2025, pagina 1). A
+    # versao anterior fazia float("- 26002.00"), que estoura, e devolvia
+    # ausencia: um estorno de R$ 26 mil sumia da conta em silencio.
+    negativo = t.startswith("-")
+    if negativo:
+        t = t[1:].strip()
     t = t.replace(".", "").replace(",", ".")
     try:
-        return float(t)
+        v = float(t)
     except ValueError:
         return None  # devolve ausencia, nunca zero
+    return -v if negativo else v
 
 
 def formato_da_localidade(s):
@@ -91,7 +99,7 @@ def formato_da_localidade(s):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ano", type=int, required=True)
-    p.add_argument("--max-paginas", type=int, default=200,
+    p.add_argument("--max-paginas", type=int, default=600,
                    help="teto de seguranca; 0 = sem teto")
     args = p.parse_args()
 
@@ -139,17 +147,46 @@ def main():
     print(f"\n=== 2. AUTOR ===")
     exemplo = linhas[0]
     print(f"campos presentes: {sorted(exemplo.keys())}")
-    print(f"autor     = {exemplo.get('autor')!r}")
-    print(f"nomeAutor = {exemplo.get('nomeAutor')!r}")
-    autores = {(l.get("autor"), l.get("nomeAutor")) for l in linhas}
-    print(f"autores distintos: {len(autores)}")
-    # "4290 - ABILIO BRUNINI": o codigo vem embutido no nome?
-    com_codigo = sum(1 for _, n in autores
-                     if n and re.match(r"^\d+\s*-\s*", str(n)))
-    print(f"nomeAutor no formato '<codigo> - <NOME>': {com_codigo}/{len(autores)}")
-    print("amostra de autores:")
-    for a, n in list(sorted(autores, key=lambda x: str(x[0])))[:5]:
-        print(f"   autor={a!r}  nomeAutor={n!r}")
+    print(f"autor        = {exemplo.get('autor')!r}")
+    print(f"nomeAutor    = {exemplo.get('nomeAutor')!r}")
+    print(f"codigoEmenda = {exemplo.get('codigoEmenda')!r}")
+
+    iguais = sum(1 for l in linhas if l.get("autor") == l.get("nomeAutor"))
+    print(f"autor == nomeAutor em {iguais}/{len(linhas)} linhas")
+
+    # O codigo do autor NAO vem em `autor` -- esse campo traz o NOME. Vem
+    # embutido em `codigoEmenda`: 202541840004 = ano 2025 + autor 4184 +
+    # numero 0004. Confere-se contra numeroEmenda, que repete os quatro
+    # ultimos digitos; se bater em todas as linhas, a leitura esta certa.
+    nomes_por_codigo = {}
+    codigos_por_nome = {}
+    formato_ok = 0
+    for l in linhas:
+        ce = str(l.get("codigoEmenda") or "")
+        ne = str(l.get("numeroEmenda") or "")
+        nome = l.get("nomeAutor")
+        if len(ce) == 12 and ce.isdigit() and ce[8:] == ne.zfill(4):
+            formato_ok += 1
+            cod = ce[4:8]
+            nomes_por_codigo.setdefault(cod, set()).add(nome)
+            codigos_por_nome.setdefault(nome, set()).add(cod)
+    print(f"codigoEmenda no formato ano+autor+numero: {formato_ok}/{len(linhas)}")
+    print(f"codigos de autor distintos: {len(nomes_por_codigo)}")
+    print(f"nomes de autor distintos:   {len(codigos_por_nome)}")
+
+    # O que decide se o vinculo e deterministico: um codigo tem que
+    # corresponder a exatamente um nome, e vice-versa.
+    ambiguos = {c: n for c, n in nomes_por_codigo.items() if len(n) > 1}
+    multi = {n: c for n, c in codigos_por_nome.items() if len(c) > 1}
+    print(f"codigos com MAIS DE UM nome: {len(ambiguos)}")
+    print(f"nomes com MAIS DE UM codigo: {len(multi)}")
+    for c, n in list(ambiguos.items())[:3]:
+        print(f"   codigo {c} -> {sorted(n)}")
+    for n, c in list(multi.items())[:3]:
+        print(f"   nome {n!r} -> {sorted(c)}")
+    print("amostra:")
+    for cod in sorted(nomes_por_codigo)[:5]:
+        print(f"   {cod} -> {sorted(nomes_por_codigo[cod])[0]!r}")
 
     print(f"\n=== 3. LOCALIDADE — a pergunta que decide a funcionalidade ===")
     formas = Counter(formato_da_localidade(l.get("localidadeDoGasto"))

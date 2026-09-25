@@ -45,3 +45,4 @@ tools/__pycache__/
 
 # Dado bruto de terceiro baixado pelo spike de emendas: nao versionar.
 tools/emendas-*.json
+

@@ -106,24 +106,40 @@ Isso não inviabiliza a funcionalidade, mas define o desenho: a informação é
 seria ruído. O certo é a seção só existir quando houver dado, como já
 fazemos com votações para quem não tem mandato.
 
-### 3.2 O código de autor: resolvido — e é o cenário bom
+### 3.2 O código de autor: resolvido, e é o cenário bom
 
-✅ **`nomeAutor` traz o código embutido no próprio nome**, no formato
-`"4290 - ABILIO BRUNINI"`. E `codigoEmenda` é composto: `202442900001` =
-ano `2024` + autor `4290` + sequência `00001`.
+✅ **Medido no ano de 2025 inteiro — 6.311 emendas.**
 
-Ou seja, o código de autor é **estável e estruturante** dentro do Portal —
-não é um rótulo solto. Não é o id da Câmara (~204554) nem do Senado, mas é
-um identificador consistente, e o par `(código, nome)` vem em toda linha.
+Uma correção primeiro: este documento afirmava que `nomeAutor` traz o código
+embutido, no formato `"4290 - ABILIO BRUNINI"`. **Isso está errado.** Era
+exemplo de terceiro, e a API ao vivo não devolve assim: `autor` e `nomeAutor`
+trazem os dois o mesmo nome puro, em **6.311 de 6.311** linhas.
 
-O vínculo então é feito **uma vez, para ~1.066 pessoas**, e daí em diante é
-determinístico: entra em `identificador_externo` com um novo valor de
-`fonte_enum` (algo como `PORTAL_TRANSPARENCIA`), exatamente como já fazemos
-com Câmara e Senado. O casamento inicial usa nome + UF + partido, com a
-máquina de resolução do COORTE e curadoria do que ficar abaixo do limiar —
-mas é trabalho **de uma vez só**, não a cada ingestão.
+O código existe, mas em outro lugar — embutido em `codigoEmenda`:
 
-Isto era a incógnita que decidia "dias ou semanas". A resposta é **dias**.
+```
+202541840004  =  ano 2025 + autor 4184 + número 0004
+                              └── LUIS CARLOS HEINZE
+```
+
+Confere-se contra `numeroEmenda`, que repete os quatro últimos dígitos:
+**6.311 de 6.311** linhas batem.
+
+E o teste que importa, a correspondência ser de um para um:
+
+| | |
+|---|---|
+| códigos de autor distintos | **628** |
+| nomes de autor distintos | **628** |
+| códigos com mais de um nome | **0** |
+| nomes com mais de um código | **0** |
+
+**Zero ambiguidade nos dois sentidos.** O vínculo é feito uma vez, para ~628
+autores, e daí em diante é determinístico: entra em `identificador_externo`
+com um novo valor de `fonte_enum`. O casamento inicial ainda é por nome — não
+há CPF aqui —, mas é trabalho de uma vez só, com um conjunto pequeno.
+
+Os 628 incluem bancadas e comissões, que não são pessoas; `tipoEmenda` separa.
 
 ### 3.3 Não temos código de município
 
@@ -144,35 +160,71 @@ IBGE. É trabalho pequeno e útil além desta funcionalidade — o próprio
 
 ---
 
-### 3.4 Boa parte do dinheiro não tem cidade — o achado decisivo
+### 3.4 Só 3,4% do dinheiro tem cidade — a resposta que decide
 
-✅ `localidadeDoGasto` assume pelo menos quatro formas, confirmadas por duas
-fontes independentes:
+✅ **Medido, 2025 completo, 6.311 emendas, R$ 32,5 bilhões pagos.**
 
-| valor | significa |
+| forma de `localidadeDoGasto` | linhas | **valor pago** |
+|---|---:|---:|
+| `Múltiplo` | 40,7% | **88,5%** — R$ 28,73 bi |
+| `ESTADO (UF)` | 35,9% | 7,5% — R$ 2,44 bi |
+| **`CIDADE - UF`** | **12,0%** | **3,4% — R$ 1,12 bi** |
+| `Nacional` | 11,0% | 0,6% — R$ 179 mi |
+| outros | 0,3% | 0,0% |
+
+**Só 3,4% do dinheiro é atribuível a um município.** A pergunta original —
+"quanto cada candidato repassou para cada cidade" — não é respondível por esta
+fonte para 96,6% do valor.
+
+#### Não é decomponível
+
+✅ `/api-de-dados/emendas/documentos/{codigo}` devolve apenas metadado de
+documento — `codigoDocumento`, `data`, `fase`, `especieTipo`. **Nenhum campo
+de localidade.** Uma emenda `Múltiplo` de R$ 1 milhão não se abre em cidades
+por aqui.
+
+#### Nenhum tipo de emenda salva o recorte
+
+Testei se algum subconjunto se comportava melhor. Não:
+
+| tipo | município (valor pago) |
+|---|---:|
+| Individual — Finalidade Definida | 5,6% |
+| Individual — Transferências Especiais | 3,5% |
+| Bancada | 1,5% |
+| Comissão | **0,0%** |
+
+Nem as Transferências Especiais — a "emenda PIX", que por lei vai a um
+município — aparecem com cidade: são **94,1% `Múltiplo`** neste endpoint.
+
+#### O que sobraria
+
+| | |
 |---|---|
-| `"ITAMARAJU - BA"` | município — **o único caso atribuível a uma cidade** |
-| `"BAHIA (UF)"` | o estado inteiro |
-| `"Nacional"` | sem recorte territorial |
-| `"Múltiplo"` | várias localidades numa linha só, sem discriminar |
+| emendas com cidade | 759 |
+| valor | R$ 1,12 bi |
+| **cidades distintas** | **474** |
+| parlamentares com ao menos uma | 275 de 628 |
 
-**Só a primeira forma responde à pergunta original.** As outras três existem
-em volume — e uma emenda `"Múltiplo"` não é divisível pela API: o rateio
-entre as cidades simplesmente não é publicado nesse endpoint.
+**474 de 5.570 municípios — 8,5%.** Para nove em cada dez cidades brasileiras,
+a página mostraria zero. E zero, aqui, seria mentira: não significa "nada foi
+destinado", significa "esta fonte não diz para onde foi".
 
-❓ **A fração de cada forma é a medição mais importante do spike** — e a que
-importa não é fração de linhas, é **fração de dinheiro**. Se metade do valor
-pago vier como `Múltiplo` ou `Nacional`, então "quanto foi para a sua
-cidade" não é uma pergunta que esta fonte responde por inteiro, e a página
-tem que **declarar a lacuna** em vez de mostrar um total que parece
-completo. Silêncio aqui viraria subnotificação com cara de fato.
+#### O caminho caro que existe
 
-O script `tools/spike-emendas.py` mede exatamente isso.
+`codigoDocumento` é número de documento do SIAFI
+(`257001000012025NE473065`). Cruzá-lo com `/api-de-dados/despesas/*` traria o
+favorecido, e o favorecido tem município. Mas são ~15 documentos por emenda ×
+2.570 emendas `Múltiplo` ≈ **38.500 requisições adicionais**, contra um
+endpoint da lista **restrita** (180 req/min). Muda a natureza do projeto.
 
 ### 3.5 Os valores vêm como texto brasileiro
 
 ✅ `valorPago` chega como `"2.359.960,00"` — string, com ponto de milhar e
-vírgula decimal. `float("2.359.960,00")` estoura; pior, um parsing
+vírgula decimal. E há negativos, com o sinal **separado por espaço**:
+`"- 26.002,00"`, que apareceu logo na primeira linha real devolvida pela API.
+Em 2025 há uma única linha assim, de R$ 26 mil — que a primeira versão do
+script transformava em ausência silenciosa. `float("2.359.960,00")` estoura; pior, um parsing
 descuidado com `try/except` devolvendo `0` transforma **R$ 2,3 milhões em
 zero silencioso**.
 
@@ -221,30 +273,34 @@ ingestão; a pergunta passa a ser do eleitor sobre o próprio município, que
 
 ---
 
-## 6. Estado do spike
+## 6. Resultado do spike (25/09/2026)
 
-O script está pronto: **`tools/spike-emendas.py`**. A lógica de parsing já
-foi testada contra os valores reais observados (`"2.359.960,00"` →
-`2359960.0`; lixo → ausência, nunca zero) e contra as quatro formas de
-localidade.
+Rodado contra 2025 completo: 6.311 emendas, 421 páginas, ~7 minutos com pausa
+de 0,4s entre requisições (~150 req/min, contra teto de 400).
 
-**Falta a chave da API** — é gratuita, sai por cadastro de e-mail em
-`portaldatransparencia.gov.br/api-de-dados/cadastrar-email`, e leva um
-minuto. Com ela:
+| incógnita | resposta |
+|---|---|
+| Volume | 6.311/ano. Não é restrição. |
+| Autor | **Determinístico.** 628 códigos ↔ 628 nomes, zero ambiguidade. |
+| Localidade | **Só 3,4% do dinheiro tem cidade.** |
 
-```bash
-export PORTAL_TRANSPARENCIA_TOKEN='...'
-python3 tools/spike-emendas.py --ano 2025
-```
+### Recomendação: não construir a partir desta fonte
 
-O token é lido do ambiente e nunca é impresso. Se a funcionalidade for
-adiante, o lugar dele é o Secrets Manager, como o pepper do CPF.
+A funcionalidade como pedida mostraria 3,4% do dinheiro e ficaria calada sobre
+o resto. Pior que incompleta, seria **enganosa**: para 91% dos municípios a
+página diria zero, e o leitor entenderia "meus representantes não destinaram
+nada", quando o correto é "esta fonte não diz para onde foi".
 
-Das três incógnitas originais, **uma já caiu**: o campo `autor` é
-estruturado e estável, então o vínculo é trabalho de dias, não de semanas.
-Restam o volume e — a que de fato decide — **a fração do dinheiro que tem
-cidade**.
+Essa plataforma não pode publicar esse tipo de número. É a mesma régua que já
+levou a esconder a tag de status do TSE enquanto o dado não existia.
 
-Duas coisas independem do spike: a tabela de correspondência de municípios
-(§3.3) e o enquadramento do §5. Essa segunda é sua, e é a que mais muda o
-produto.
+### Uma armadilha de método, registrada
+
+A primeira execução parou em `HTTP 504` na página 136, com 32% do ano
+coletado. Nessa amostra, `MUNICIPIO` aparecia com **22,6%** do valor. No ano
+completo são **3,4%** — diferença de quase sete vezes.
+
+A paginação não devolve as linhas em ordem aleatória, então amostra parcial
+não é amostra representativa. Se eu tivesse concluído ali, a recomendação
+teria sido a oposta.
+
