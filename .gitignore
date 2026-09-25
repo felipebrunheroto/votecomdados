@@ -34,3 +34,8 @@ crash.*.log
 # owner e nunca versionado: este repositório é PÚBLICO.
 *.zip
 consulta_cand_*
+
+# Chave da API do Portal da Transparencia, colocada aqui pelo dono do
+# projeto. NUNCA versionar: o repositorio e publico, e o arquivo guarda a
+# chave em claro. Nao commitar nem alterar este arquivo.
+docs/dados-api.md
