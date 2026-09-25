@@ -117,19 +117,41 @@ jobs:
       # `workflow_dispatch` nascer decorativa.
       - if: github.event_name == 'pull_request'
         uses: actions/github-script@v9
+        # Os valores chegam por `env` e sao lidos com `process.env`, NUNCA
+        # interpolados com ${{ }} no corpo do script.
+        #
+        # Antes, a saida do plan era colada dentro de um template literal.
+        # Bastava uma crase no texto para encerrar a string e o resto virar
+        # codigo -- foi o que aconteceu em 25/09/2026, com crases nos
+        # comentarios de `funcoes/roteamento.js` (`SyntaxError: Unexpected
+        # identifier 'next'`).
+        #
+        # O estrago possivel e maior que um job vermelho: este job carrega
+        # credencial AWS e token do GitHub, entao qualquer texto que chegue
+        # ao plan executava JS aqui dentro. `github.actor` tinha o mesmo
+        # problema. Interpolacao de ${{ }} em corpo de script e injecao.
+        env:
+          PLAN_RESULTADO: ${{ steps.plan.outcome }}
+          PLAN_SAIDA: ${{ steps.plan.outputs.stdout }}
+          ATOR: ${{ github.actor }}
+          COMMIT: ${{ github.sha }}
         with:
           script: |
-            const output = `#### \`terraform plan\`: \`${{ steps.plan.outcome }}\`
-
-            <details><summary>Mostrar o plan completo</summary>
-
-            \`\`\`
-            ${{ steps.plan.outputs.stdout }}
-            \`\`\`
-
-            </details>
-
-            *Acionado por @${{ github.actor }}, commit \`${{ github.sha }}\`*`;
+            const cerca = "```";
+            const output = [
+              "#### `terraform plan`: `" + process.env.PLAN_RESULTADO + "`",
+              "",
+              "<details><summary>Mostrar o plan completo</summary>",
+              "",
+              cerca,
+              process.env.PLAN_SAIDA,
+              cerca,
+              "",
+              "</details>",
+              "",
+              "*Acionado por @" + process.env.ATOR +
+                ", commit `" + process.env.COMMIT + "`*",
+            ].join("\n");
 
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,

@@ -25,8 +25,16 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: process.env.NODE_ENV === "production" ? "export" : undefined,
 
-  // Emite /politicos/<id>/index.html em vez de /politicos/<id>.html, que é o
-  // que S3 + CloudFront servem sem configuração extra de roteamento.
+  // Emite /politicos/<id>/index.html em vez de /politicos/<id>.html.
+  //
+  // ATENÇÃO: este comentário afirmava que isso "é o que S3 + CloudFront
+  // servem sem configuração extra de roteamento". Era falso, e custou caro.
+  // Vale para origem S3 *website*; a nossa é S3 REST com OAC, onde
+  // `default_root_object` só se aplica à RAIZ. Resultado medido em produção
+  // em 25/09/2026: `/sobre/` e `/dados-abertos/` mostravam "Página não
+  // encontrada" num navegador de verdade, e nenhum perfil entregava o HTML
+  // pré-renderizado. A configuração extra existe e é obrigatória:
+  // `infra/funcoes/roteamento.js`.
   trailingSlash: true,
 
   images: {
