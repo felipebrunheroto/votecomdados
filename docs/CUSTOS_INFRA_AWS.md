@@ -195,6 +195,81 @@ o prazo, porque não são cobrados por tempo de uso:
   custo recorrente escala linearmente a partir da tabela acima (item por
   item, exceto os dois marcados como únicos).
 
+## O que a fatura real mostrou (25/09/2026)
+
+O plano acima é estimativa de antes de construir. Esta seção registra o
+primeiro confronto com a fatura, porque a maior linha não era nenhuma das
+previstas.
+
+### S3 é a maior linha, e quase toda de requisição
+
+| item | quantidade | custo |
+|---|---|---|
+| **Requests-Tier1** (PUT/COPY/POST/LIST) | **11.132.364** | **US$ 55,66** |
+| Requests-Tier2 (GET) | 9.937 | US$ 0,00 |
+| TimedStorage-ByteHrs | 19,212 GB-Mo | US$ 0,44 |
+| *AWS Free Tier* | *crédito* | *(US$ 56,10)* |
+| **líquido** | | **US$ 0,00** |
+
+**99,2% do custo do S3 é PUT, não armazenamento.** Hoje o crédito cobre tudo
+— e é por isso que os alarmes de billing ficam em `OK`. Quando o crédito
+acabar, vira ~US$ 67/mês, de longe a maior linha do projeto.
+
+### De onde vêm 11 milhões de PUT
+
+Cada `aws s3 sync` do deploy do frontend escreve **294.701 objetos**:
+
+```
+250.175  proposicoes/<n>
+ 41.015  votacoes/<n>
+  3.470  politicos/<id>
+     ~40  páginas e assets
+```
+
+O `sync` compara tamanho e data de modificação; um `next build` novo regenera
+tudo com mtime nova, então **todos** são reenviados, mesmo os que não mudaram.
+Uma proposição de 2015 é reescrita a cada publicação.
+
+11.132.364 ÷ 294.701 = **37,8 sincronizações completas em 25 dias**, ou ~1,5
+por dia. O gatilho por watermark está funcionando: das 5 a 7 execuções
+horárias do cron, a maioria pula corretamente; reconstroem as de merge e as de
+mudança real de dado.
+
+### Duas estimativas minhas que a fatura corrigiu
+
+Vale registrar, porque o erro tem padrão:
+
+- Estimei **48,6 milhões** de PUT/mês; o real projeta **13,4 milhões**. Assumi
+  que toda execução do cron reconstruía, a partir de uma amostra de seis
+  execuções tirada de um dia de merges — o dia menos representativo possível.
+- Tratei o acúmulo de versões não-correntes como problema de custo. O
+  armazenamento inteiro são **19,2 GB, US$ 0,44/mês**. A regra de ciclo de vida
+  (`edge.tf`) continua certa como higiene — impede crescimento sem limite —,
+  mas não era urgência financeira nenhuma.
+
+### A decisão em aberto
+
+**291 mil dos 294 mil objetos são páginas de proposição e votação.** Tirá-las
+do pré-render corta 99% dos PUT. Elas já funcionam pelo fallback de cliente
+(`web/src/app/not-found.tsx`); o que se perde é indexação em buscador.
+
+E aqui há um fato que muda a avaliação: **até 25/09/2026 essas páginas estavam
+inalcançáveis** — `/proposicoes/123/` devolvia a casca do 404, pelo mesmo
+defeito de roteamento que quebrava `/sobre/`. Não existe tráfego de busca a
+perder, porque nunca houve.
+
+**Decidido em 25/09/2026: esperar uma semana antes de cortar.** Com o
+roteamento corrigido e o top-10 do relatório filtrando só páginas servidas
+(2xx/304), o relatório de **~02/10/2026** é a primeira medição honesta de se
+alguém chega nessas páginas.
+
+- Se `/proposicoes/` **não** aparecer no top-10: cortar o pré-render delas
+  resolve o custo inteiro, sem perda medível.
+- Se aparecer: discutir meio-termo — pré-renderizar só as mais acessadas, ou
+  só as da legislatura corrente com tramitação recente.
+
+Enquanto isso não acontece, não há pressa: o custo líquido é zero.
+
 ## Resumo
 
 | | Total (45 dias) |

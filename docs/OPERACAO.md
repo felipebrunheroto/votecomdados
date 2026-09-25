@@ -318,9 +318,18 @@ A consequência aceita: **visitante único é impossível de calcular.** O que s
 obtém é requisição por página, que é o que a pergunta pedia.
 
 As dez páginas mais acessadas dos últimos 7 dias saem automaticamente no
-workflow **Verificar guardrails**, junto do relatório de segunda. Assets
+workflow **Verificar guardrails**, junto do relatório diário. Assets
 (`/_next/`, fontes, ícones) ficam de fora — uma visita carrega dezenas deles e
-afogaria a lista.
+afogaria a lista. Desde 25/09/2026 só contam respostas **2xx e 304**: até
+então, sondagem de scanner ocupava oito das dez linhas. O 304 conta de
+propósito — significa que a pessoa pediu a página e o navegador revalidou o
+cache, o que é leitura.
+
+**Decisão marcada para ~02/10/2026.** O relatório dessa data é a primeira
+janela de 7 dias inteiramente posterior à correção de roteamento, e decide se
+as 291 mil páginas de proposição e votação continuam pré-renderizadas — elas
+respondem por 99% do custo de S3 do projeto. Critério e contexto em
+[CUSTOS_INFRA_AWS.md § A decisão em aberto](CUSTOS_INFRA_AWS.md).
 
 Para uma análise própria, de um dia específico:
 
@@ -330,12 +339,19 @@ aws s3 cp --recursive s3://votecomdados-acesso-<conta>/ ./log/ \
 gunzip -c ./log/**/*.gz | awk '{print $3}' | sort | uniq -c | sort -rn | head -20
 ```
 
-**Não filtre por `sc-status == 200` esperando excluir páginas inexistentes.**
-O CloudFront reescreve 403/404 para 200 servindo `/404.html` — é o que faz o
-fallback dos ~28 mil perfis funcionar (ver `custom_error_response` em
-`infra/edge.tf`). Perfil renderizado no navegador e endereço digitado errado
-registram o mesmo 200. Quem separa os dois é `x-edge-result-type`, que traz
-`Error` nesses casos.
+**Cuidado ao filtrar por `sc-status`.** Desde 25/09/2026 há dois
+comportamentos distintos, e confundi-los leva a conclusão errada:
+
+- **Sondagem** (`/.env`, `/.git/*`, `.php`, `wp-*`) recebe **404 de verdade**,
+  devolvido pela função de borda `infra/funcoes/roteamento.js`. Filtrar por
+  2xx exclui essas linhas corretamente.
+- **Endereço digitado errado e perfil não pré-renderizado** continuam em
+  **200**: o CloudFront reescreve 403/404 para 200 servindo `/404.html`, que é
+  o que faz o fallback dos ~28 mil perfis funcionar (`custom_error_response`
+  em `infra/edge.tf`). Perfil montado no navegador e URL errada registram o
+  mesmo 200.
+
+Quem separa esses dois últimos é `x-edge-result-type`, que traz `Error`.
 
 ### Se um dia precisar de mais que isso
 
