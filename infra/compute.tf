@@ -186,6 +186,7 @@ resource "aws_ecs_task_definition" "ingestion" {
       { name = "DB_USER", valueFrom = "${aws_db_instance.principal.master_user_secret[0].secret_arn}:username::" },
       { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.principal.master_user_secret[0].secret_arn}:password::" },
       { name = "VOTECOMDADOS_CPF_PEPPER", valueFrom = aws_secretsmanager_secret.cpf_hmac_pepper.arn },
+      { name = "VOTECOMDADOS_PORTAL_CHAVE", valueFrom = aws_secretsmanager_secret.portal_transparencia_chave.arn },
     ]
 
     logConfiguration = {

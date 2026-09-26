@@ -8,6 +8,7 @@ import br.org.votecomdados.ingestion.armazenamento.ArmazenamentoDeObjetos;
 import br.org.votecomdados.ingestion.coorte.JobDeCoorte;
 import br.org.votecomdados.ingestion.coorte.LeitorDeArquivoTse;
 import br.org.votecomdados.ingestion.download.JobIncremental;
+import br.org.votecomdados.ingestion.emendas.JobDeEmendas;
 import br.org.votecomdados.ingestion.execucao.ControleDeExecucaoService;
 import br.org.votecomdados.ingestion.execucao.Execucao;
 import br.org.votecomdados.ingestion.identidade.CuradoriaDeVinculos;
@@ -57,6 +58,7 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
     private final JobDeCoorte coorte;
     private final LeitorDeArquivoTse leitorTse;
     private final JobIncremental incremental;
+    private final JobDeEmendas emendas;
     private final OrquestradorDaAlesp alesp;
     private final OrquestradorDoSenado senado;
     private final JobDeBackfill backfillCamara;
@@ -68,6 +70,7 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
     SeletorDeJob(ControleDeExecucaoService controle, JobDeCoorte coorte,
                  LeitorDeArquivoTse leitorTse, JobIncremental incremental,
                  OrquestradorDaAlesp alesp, OrquestradorDoSenado senado,
+                 JobDeEmendas emendas,
                  JobDeBackfill backfillCamara, ExportadorDeDadosAbertos exportador,
                  ArmazenamentoDeObjetos armazenamento,
                  CuradoriaDeVinculos curadoria) {
@@ -75,6 +78,7 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
         this.coorte = coorte;
         this.leitorTse = leitorTse;
         this.incremental = incremental;
+        this.emendas = emendas;
         this.alesp = alesp;
         this.senado = senado;
         this.backfillCamara = backfillCamara;
@@ -213,10 +217,23 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
                                       r.votacoes() + r.votos(), 0);
                     return;
                 }
+                if (fonte == Fonte.PORTAL_TRANSPARENCIA) {
+                    // A CGU nao publica Last-Modified nem ETag, e os valores de
+                    // uma emenda mudam durante o ano inteiro -- empenhada em
+                    // marco, paga em outubro. Nao ha "so o que mudou" a pedir:
+                    // o ano e relido por completo, e o upsert atualiza.
+                    //
+                    // O watermark e o instante da coleta, como na coorte do TSE.
+                    int anoEmendas = inteiro(args, "ano", LocalDate.now().getYear());
+                    var r = emendas.carregar(anoEmendas);
+                    publicarDadosAbertos(args);
+                    controle.concluir(execucao, Instant.now(), r.emendas(), 0);
+                    return;
+                }
                 if (fonte != Fonte.CAMARA) {
                     throw new IllegalArgumentException(
-                        "o incremental so esta implementado para CAMARA, ALESP e SENADO; "
-                        + "--fonte=" + fonte + " nao e reconhecida");
+                        "o incremental so esta implementado para CAMARA, ALESP, SENADO "
+                        + "e PORTAL_TRANSPARENCIA; --fonte=" + fonte + " nao e reconhecida");
                 }
                 int ano = inteiro(args, "ano", LocalDate.now().getYear());
                 Path trabalho = diretorioDeTrabalho();
