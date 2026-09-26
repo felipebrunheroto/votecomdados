@@ -18,6 +18,9 @@ name: Terraform
 #   secrets.CPF_HMAC_PEPPER — gerado uma única vez (ex.: openssl rand -base64 32),
 #                              nunca trocado depois (ver infra/secrets.tf)
 #   secrets.BILLING_ALERT_EMAIL
+#   secrets.PORTAL_TRANSPARENCIA_CHAVE — chave da API de Dados da CGU (emendas).
+#                              Ao contrario do pepper, PODE ser rotacionada:
+#                              autentica leitura e nao deriva identificador.
 
 on:
   pull_request:
@@ -91,7 +94,8 @@ jobs:
           terraform plan -no-color -input=false \
             -var="dominio=${{ vars.DOMINIO }}" \
             -var="billing_alert_email=${{ secrets.BILLING_ALERT_EMAIL }}" \
-            -var="cpf_hmac_pepper=${{ secrets.CPF_HMAC_PEPPER }}"
+            -var="cpf_hmac_pepper=${{ secrets.CPF_HMAC_PEPPER }}" \
+            -var="portal_transparencia_chave=${{ secrets.PORTAL_TRANSPARENCIA_CHAVE }}"
         continue-on-error: true
 
       # O plan tambem vai para o resumo do job: num disparo manual nao existe
@@ -218,4 +222,5 @@ jobs:
           terraform apply -auto-approve -input=false \
             -var="dominio=${{ vars.DOMINIO }}" \
             -var="billing_alert_email=${{ secrets.BILLING_ALERT_EMAIL }}" \
-            -var="cpf_hmac_pepper=${{ secrets.CPF_HMAC_PEPPER }}"
+            -var="cpf_hmac_pepper=${{ secrets.CPF_HMAC_PEPPER }}" \
+            -var="portal_transparencia_chave=${{ secrets.PORTAL_TRANSPARENCIA_CHAVE }}"
