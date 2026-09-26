@@ -58,7 +58,15 @@ variable "portal_transparencia_chave" {
   description = "Chave da API de Dados da CGU, de onde vêm as emendas (ver docs/DISCOVERY_EMENDAS.md). Obtida em portaldatransparencia.gov.br/api-de-dados/cadastrar-email, com login gov.br nível Prata ou Ouro. Rotacionável sem impacto: autentica leitura e não deriva identificador guardado. Vale a mesma ressalva do pepper sobre `sensitive`: ele oculta o valor de plan/apply, mas o state guarda em texto claro — a proteção real é o bucket criptografado com acesso restrito por IAM."
   type        = string
   sensitive   = true
-  # Default vazio de propósito: a aplicação recusa coletar sem chave, com
-  # mensagem explícita, em vez de rodar e gravar zero emendas em silêncio.
-  default = ""
+  # Sem default. Um default vazio pareceria inofensivo e não é: o `apply`
+  # criaria o segredo VAZIO, o plan passaria verde, e a falha só apareceria
+  # quando o job de emendas recusasse rodar — dias depois, longe da causa.
+  #
+  # A validação cobre o caso que "sem default" não pega sozinho: o workflow
+  # passa `-var="portal_transparencia_chave="` quando o secret do GitHub não
+  # existe, e string vazia é valor explícito, não ausência.
+  validation {
+    condition     = length(var.portal_transparencia_chave) > 0
+    error_message = "portal_transparencia_chave vazia. Cadastre o secret PORTAL_TRANSPARENCIA_CHAVE em Settings > Secrets and variables > Actions. A chave sai de portaldatransparencia.gov.br/api-de-dados/cadastrar-email."
+  }
 }
