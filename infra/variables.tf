@@ -53,3 +53,12 @@ variable "cpf_hmac_pepper" {
   type        = string
   sensitive   = true
 }
+
+variable "portal_transparencia_chave" {
+  description = "Chave da API de Dados da CGU, de onde vêm as emendas (ver docs/DISCOVERY_EMENDAS.md). Obtida em portaldatransparencia.gov.br/api-de-dados/cadastrar-email, com login gov.br nível Prata ou Ouro. Rotacionável sem impacto: autentica leitura e não deriva identificador guardado. Vale a mesma ressalva do pepper sobre `sensitive`: ele oculta o valor de plan/apply, mas o state guarda em texto claro — a proteção real é o bucket criptografado com acesso restrito por IAM."
+  type        = string
+  sensitive   = true
+  # Default vazio de propósito: a aplicação recusa coletar sem chave, com
+  # mensagem explícita, em vez de rodar e gravar zero emendas em silêncio.
+  default = ""
+}

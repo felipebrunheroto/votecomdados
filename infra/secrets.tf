@@ -15,3 +15,23 @@ resource "aws_secretsmanager_secret_version" "cpf_hmac_pepper" {
   secret_id     = aws_secretsmanager_secret.cpf_hmac_pepper.id
   secret_string = var.cpf_hmac_pepper
 }
+
+# Chave da API de Dados do Portal da Transparência (CGU), de onde vêm as
+# emendas parlamentares.
+#
+# Diferente do pepper, esta PODE ser rotacionada sem consequência: ela
+# autentica a leitura, não deriva identificador nenhum guardado no banco. Se
+# vazar, gere outra no portal e aplique — o dano é uso indevido da cota, não
+# perda de dado.
+#
+# A API recusa cliente sem chave (HTTP 401) e suspende o token em uso acima de
+# 400 req/min. Ver docs/DISCOVERY_EMENDAS.md § 2.
+resource "aws_secretsmanager_secret" "portal_transparencia_chave" {
+  name        = "votecomdados/portal-transparencia-chave"
+  description = "Chave da API de Dados da CGU (emendas). Rotacionável: autentica leitura, não deriva identificador."
+}
+
+resource "aws_secretsmanager_secret_version" "portal_transparencia_chave" {
+  secret_id     = aws_secretsmanager_secret.portal_transparencia_chave.id
+  secret_string = var.portal_transparencia_chave
+}

@@ -28,6 +28,7 @@ data "aws_iam_policy_document" "execucao_ecs_secrets" {
     resources = [
       aws_db_instance.principal.master_user_secret[0].secret_arn,
       aws_secretsmanager_secret.cpf_hmac_pepper.arn,
+      aws_secretsmanager_secret.portal_transparencia_chave.arn,
     ]
   }
 }

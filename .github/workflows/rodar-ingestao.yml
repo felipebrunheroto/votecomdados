@@ -42,9 +42,9 @@ on:
         description: "Fonte — SEMPRE obrigatória, em todo job"
         type: choice
         required: true
-        options: [CAMARA, SENADO, ALESP, TSE]
+        options: [CAMARA, SENADO, ALESP, TSE, PORTAL_TRANSPARENCIA]
       ano:
-        description: "Ano — INCREMENTAL do Senado apenas. O BACKFILL RECUSA este campo; use desde/ate"
+        description: "Ano — INCREMENTAL do Senado e do PORTAL_TRANSPARENCIA. O BACKFILL RECUSA este campo; use desde/ate"
         type: string
         required: false
       desde:
