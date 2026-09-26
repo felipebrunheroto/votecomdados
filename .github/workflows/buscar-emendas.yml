@@ -1,0 +1,77 @@
+name: Buscar emendas (CGU)
+
+# Invoca a Lambda em sa-east-1 que busca as emendas do ano e grava o JSON no
+# bucket de ingestão.
+#
+# A busca mora em São Paulo porque a API da CGU recusa requisição vinda de
+# fora do Brasil — medido em 26/09/2026: 200 de máquina doméstica brasileira,
+# 401 do CloudShell em sa-east-1 (alcança, só quer a chave), e 504 do ECS em
+# us-east-1 e do runner do GitHub Actions. Ver infra/emendas.tf.
+#
+# Este workflow existe porque a Lambda precisa de um gatilho operável: o IAM
+# user de bootstrap não tem `lambda:InvokeFunction`, e ampliá-lo à mão para
+# isso deixaria resíduo de permissão. A role do Actions já tem PowerUser.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ano:
+        description: "Ano a buscar (padrão: ano corrente)"
+        type: string
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: buscar-emendas
+  cancel-in-progress: false
+
+jobs:
+  buscar:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: sa-east-1
+
+      - name: invoca a Lambda
+        env:
+          ANO: ${{ inputs.ano }}
+        run: |
+          set -uo pipefail
+          ano="${ANO:-$(date -u +%Y)}"
+          echo "buscando emendas de $ano"
+
+          # A função leva ~3min (421 páginas em 2025). O padrão da CLI é 60s,
+          # e sem isto o erro seria do cliente, não da Lambda -- confuso de
+          # diagnosticar justamente quando a Lambda funcionou.
+          aws lambda invoke \
+            --function-name votecomdados-buscar-emendas \
+            --cli-binary-format raw-in-base64-out \
+            --cli-read-timeout 0 \
+            --payload "{\"ano\":$ano}" \
+            saida.json > invocacao.json || true
+
+          echo "### Busca de emendas — $ano" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat saida.json >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat saida.json
+
+          # A CLI devolve 0 mesmo quando a FUNÇÃO estourou: o erro vem no
+          # corpo, com FunctionError na resposta da invocação. Confiar no
+          # código de saída aqui deixaria o job verde com a busca falhada --
+          # exatamente o tipo de sucesso falso que este projeto persegue.
+          if grep -q '"FunctionError"' invocacao.json 2>/dev/null; then
+            echo "::error::a Lambda falhou; veja o corpo acima"
+            exit 1
+          fi
+          if ! grep -q '"emendas"' saida.json 2>/dev/null; then
+            echo "::error::resposta sem o campo 'emendas'; busca nao concluiu"
+            exit 1
+          fi
