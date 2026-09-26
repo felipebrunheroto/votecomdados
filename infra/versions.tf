@@ -10,6 +10,12 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    # Empacota a Lambda de busca de emendas a partir do .py versionado, sem
+    # artefato binario no repositorio nem passo de build separado.
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 }
 

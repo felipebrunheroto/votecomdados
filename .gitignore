@@ -46,3 +46,6 @@ tools/__pycache__/
 # Dado bruto de terceiro baixado pelo spike de emendas: nao versionar.
 tools/emendas-*.json
 
+
+# Artefato empacotado pelo Terraform a partir do .py versionado ao lado.
+infra/lambda/**/*.zip
