@@ -1,0 +1,57 @@
+name: Diagnóstico — alcance da CGU
+
+# A API de Dados da CGU responde 200 em ~0,15s de uma máquina doméstica e
+# HTTP 504 em toda tentativa a partir da task ECS em us-east-1 — reproduzido
+# em duas execuções, com IPs distintos, em 26/09/2026. Não é User-Agent:
+# curl, Java-http-client e sem UA, todos passam de fora.
+#
+# Este workflow responde a pergunta que decide a arquitetura da ingestão de
+# emendas: o runner do GitHub Actions alcança a API?
+#
+# Só leitura, uma requisição, sem efeito em produção.
+
+on:
+  workflow_dispatch:
+  # Tambem no PR que toca este arquivo: workflow_dispatch so funciona depois
+  # do merge no branch padrao, e a resposta e necessaria ANTES de decidir a
+  # arquitetura. Restrito ao proprio caminho para nao rodar em todo PR.
+  pull_request:
+    paths:
+      - .github/workflows/diagnostico-cgu.yml
+
+permissions:
+  contents: read
+
+jobs:
+  alcance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: a API responde daqui?
+        env:
+          CHAVE: ${{ secrets.PORTAL_TRANSPARENCIA_CHAVE }}
+        run: |
+          set -uo pipefail
+          URL="https://api.portaldatransparencia.gov.br/api-de-dados/emendas?ano=2025&pagina=1"
+
+          echo "### Alcance da API da CGU" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Sem chave: esperado 401. Serve para separar "nao chego na API" de
+          # "chego e ela recusa a chave" -- 401 ja prova que o caminho existe.
+          sem=$(curl -sS -m 60 -o /dev/null -w '%{http_code}' "$URL" || echo "erro")
+          echo "- sem chave: \`$sem\` (401 = alcancei a API)" >> "$GITHUB_STEP_SUMMARY"
+
+          com=$(curl -sS -m 60 -o corpo.json -w '%{http_code}' \
+                  -H "chave-api-dados: $CHAVE" "$URL" || echo "erro")
+          linhas=$(jq 'length' corpo.json 2>/dev/null || echo "?")
+          echo "- com chave: \`$com\`, $linhas linha(s)" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "sem chave: $sem | com chave: $com | linhas: $linhas"
+
+          if [ "$com" = "200" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**O runner alcanca a API.** O bloqueio e especifico da faixa da AWS." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**O runner tambem nao alcanca.** O bloqueio e mais amplo que a AWS." >> "$GITHUB_STEP_SUMMARY"
+          fi
