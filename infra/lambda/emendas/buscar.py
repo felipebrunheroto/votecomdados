@@ -34,9 +34,15 @@ import boto3
 
 BASE = "https://api.portaldatransparencia.gov.br/api-de-dados/emendas"
 
-# 400 req/min no horario normal, 700 entre 00:00 e 06:00, e uso acima disso
-# SUSPENDE o token. 250ms da ~240/min: folga confortavel.
-PAUSA = 0.25
+# Teto de 400 req/min no horario normal (700 entre 00:00 e 06:00), e uso
+# acima SUSPENDE o token. A pausa e ADAPTATIVA: dorme so o que falta para
+# fechar 250ms desde o inicio da requisicao, ~240/min no pior caso.
+#
+# Pausa fixa era desperdicio caro aqui. O spike mediu 1,24s por pagina; com
+# 0,25s fixos em cima, 421 paginas dao 627s -- acima do timeout de 600s que
+# eu havia escrito de cabeca como se fosse folga. Quando a requisicao ja
+# demora mais que o intervalo, nao ha nada a esperar: a taxa ja esta baixa.
+INTERVALO = 0.25
 TENTATIVAS = 4
 # 2025 teve 421 paginas de 15. O teto e folga com margem, e existe para a
 # funcao nao girar ate o timeout se a API passar a devolver pagina sempre.
@@ -55,6 +61,7 @@ def _chave():
 
 
 def _pagina(chave, ano, pagina):
+    """Uma pagina, com recuo. Devolve tambem quanto demorou, para a pausa."""
     url = f"{BASE}?ano={ano}&pagina={pagina}"
     pedido = urllib.request.Request(
         url, headers={"chave-api-dados": chave, "Accept": "application/json"})
@@ -79,18 +86,20 @@ def _pagina(chave, ano, pagina):
 
 
 def handler(evento, _contexto):
+    inicio = time.monotonic()
     ano = int(evento.get("ano") or time.gmtime().tm_year)
     chave = _chave()
 
     linhas = []
     pagina = 1
     while pagina <= MAX_PAGINAS:
+        comeco = time.monotonic()
         lote = _pagina(chave, ano, pagina)
         if not lote:
             break
         linhas.extend(lote)
         pagina += 1
-        time.sleep(PAUSA)
+        time.sleep(max(0.0, INTERVALO - (time.monotonic() - comeco)))
 
     if not linhas:
         # Ano sem nenhuma linha e quase certamente defeito, nao realidade.
@@ -98,6 +107,7 @@ def handler(evento, _contexto):
         # falha silenciosa, que e o que este projeto mais combate.
         raise RuntimeError(f"nenhuma emenda retornada para {ano}; nada gravado")
 
+    duracao = time.monotonic() - inicio
     corpo = json.dumps(linhas, ensure_ascii=False).encode("utf-8")
     destino = f"entrada/emendas-{ano}.json"
     boto3.client("s3").put_object(
@@ -109,6 +119,9 @@ def handler(evento, _contexto):
         "emendas": len(linhas),
         "paginas": pagina - 1,
         "bytes": len(corpo),
+        # Vai no resumo de proposito: e o numero que diz se o timeout ainda
+        # tem folga, sem precisar cavar o log depois.
+        "segundos": round(duracao, 1),
         "destino": f"s3://{BALDE}/{destino}",
     }
     print(json.dumps(resumo, ensure_ascii=False))

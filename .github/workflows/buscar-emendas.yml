@@ -41,6 +41,12 @@ jobs:
       - name: invoca a Lambda
         env:
           ANO: ${{ inputs.ano }}
+          # UMA tentativa. O padrao da CLI reinvoca ao receber erro, e
+          # invocacao sincrona nao e idempotente do ponto de vista do tempo:
+          # em 27/09 um estouro de timeout virou seis reinvocacoes e o passo
+          # ficou pendurado por mais de uma hora, gastando minuto de CI e
+          # escondendo qual foi a falha.
+          AWS_MAX_ATTEMPTS: "1"
         run: |
           set -uo pipefail
           ano="${ANO:-$(date -u +%Y)}"
@@ -75,3 +81,14 @@ jobs:
             echo "::error::resposta sem o campo 'emendas'; busca nao concluiu"
             exit 1
           fi
+
+      # Sem isto, diagnosticar falha exige credencial e console. O passo de
+      # 27/09 ficou uma hora sem dizer NADA sobre o que a funcao estava
+      # fazendo -- a causa teve de ser inferida por aritmetica.
+      - name: o que a Lambda registrou
+        if: always()
+        run: |
+          set -uo pipefail
+          aws logs tail /aws/lambda/votecomdados-buscar-emendas \
+            --since 30m --format short 2>/dev/null | tail -40 || \
+            echo "(sem log no periodo)"
