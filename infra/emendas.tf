@@ -100,9 +100,12 @@ resource "aws_lambda_function" "buscar_emendas" {
   filename         = data.archive_file.buscar_emendas.output_path
   source_code_hash = data.archive_file.buscar_emendas.output_base64sha256
 
-  # 421 páginas com 250ms de pausa dão ~3min; o recuo em falha pode somar
-  # mais. Dez minutos é folga sem ser o teto de 15.
-  timeout     = 600
+  # 900s é o teto da Lambda, e aqui é escolha, não preguiça: o spike mediu
+  # 1,24s por página, então 421 páginas custam ~520s só de latência. Os 600s
+  # que eu havia escrito vinham de um "~3min" de cabeça que contrariava a
+  # minha própria medição — e uma execução de 27/09 ficou pendurada por mais
+  # de uma hora, com a CLI reinvocando a cada estouro.
+  timeout     = 900
   memory_size = 256
 
   environment {
