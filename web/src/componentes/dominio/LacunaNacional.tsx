@@ -14,15 +14,21 @@ import type { ResumoDeEmendas } from "@/lib/api/tipos";
  * que ele estava vendo, e ninguém teria percebido — foi preciso carregar mais
  * anos para o erro aparecer. Calculado, o texto fica certo sozinho a cada ano
  * que entra.
+ *
+ * <h2>Por que o tipo é opcional</h2>
+ *
+ * O build do frontend chama a API de produção. Em 28/09/2026 ele rodou ANTES
+ * de o deploy do backend terminar, a API ainda não devolvia este campo, e a
+ * versão anterior deste componente derrubou o build inteiro — 60.553 páginas
+ * — com `Cannot read properties of undefined`.
+ *
+ * Enriquecimento opcional ausente não pode matar a publicação: o site sem a
+ * frase da lacuna é pior que com ela, mas o site NO AR sem a frase é muito
+ * melhor que nenhum site.
  */
-export function LacunaNacional({ nacional }: { nacional: ResumoDeEmendas }) {
-  const comCidade =
-    nacional.porLocalidade.find((f) => f.localidade === "MUNICIPIO")?.desembolso ?? 0;
-  const semCidade = nacional.desembolso - comCidade;
-
-  if (nacional.desembolso <= 0 || semCidade <= 0) return null;
-
-  const percentual = Math.round((semCidade / nacional.desembolso) * 100);
+export function LacunaNacional({ nacional }: { nacional?: ResumoDeEmendas | null }) {
+  const percentual = fracaoSemMunicipio(nacional);
+  if (percentual === null) return null;
 
   return (
     <p className="mt-4 rounded border border-aviso-borda bg-aviso-fundo p-3 text-sm text-aviso-texto">
@@ -37,14 +43,25 @@ export function LacunaNacional({ nacional }: { nacional: ResumoDeEmendas }) {
   );
 }
 
-/** A mesma medida, para a tela de cidade sem registro. */
-export function ExplicacaoDaAusencia({ nacional }: { nacional: ResumoDeEmendas }) {
+/**
+ * Quanto por cento do desembolso NÃO tem município, ou `null` quando não dá
+ * para saber.
+ *
+ * Devolve `null` — e não zero — quando o resumo falta ou vem vazio: zero
+ * afirmaria que todo o dinheiro tem cidade, que é o oposto da verdade.
+ */
+function fracaoSemMunicipio(n?: ResumoDeEmendas | null): number | null {
+  if (!n || !Array.isArray(n.porLocalidade) || !(n.desembolso > 0)) return null;
   const comCidade =
-    nacional.porLocalidade.find((f) => f.localidade === "MUNICIPIO")?.desembolso ?? 0;
-  const semCidade = nacional.desembolso - comCidade;
-  const percentual = nacional.desembolso > 0
-    ? Math.round((semCidade / nacional.desembolso) * 100)
-    : null;
+    n.porLocalidade.find((f) => f.localidade === "MUNICIPIO")?.desembolso ?? 0;
+  const semCidade = n.desembolso - comCidade;
+  if (semCidade <= 0) return null;
+  return Math.round((semCidade / n.desembolso) * 100);
+}
+
+/** A mesma medida, para a tela de cidade sem registro. */
+export function ExplicacaoDaAusencia({ nacional }: { nacional?: ResumoDeEmendas | null }) {
+  const percentual = fracaoSemMunicipio(nacional);
 
   return (
     <p className="mx-auto mt-2 max-w-prose text-sm text-texto-suave">
