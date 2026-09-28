@@ -171,6 +171,27 @@ public class EmendaRepositorio {
     }
 
     /**
+     * O acervo inteiro, sem recorte.
+     *
+     * <h2>Por que a interface precisa disto, e não de um número escrito à mão</h2>
+     *
+     * A tela do município diz ao leitor qual fração do dinheiro é registrada
+     * sem discriminar cidade — é o que explica por que a lista dele é curta.
+     * Esse texto nasceu com "88,5%" fixo, medido sobre 2025.
+     *
+     * <p>Quando 2023, 2024 e 2026 entraram, a série mostrou que a proporção
+     * VARIA muito: emendas com município são 23,3% das linhas em 2023 e 12,0%
+     * em 2025. O número fixo passou a afirmar ao leitor algo que não vale para
+     * o acervo que ele está vendo, e ninguém teria percebido — foi preciso
+     * carregar mais anos para o erro aparecer.
+     *
+     * <p>Vindo daqui, o texto fica certo sozinho a cada ano carregado.
+     */
+    public ResumoDeEmendas resumoNacional() {
+        return resumo("TRUE AND :chave IS NOT NULL", "1");
+    }
+
+    /**
      * O {@code " "} antes de {@code condicao} não é enfeite: <b>text block do
      * Java remove espaço em branco no fim de cada linha</b>, então
      * {@code WHERE """ + condicao} produz {@code WHEREe.politico_id} e o

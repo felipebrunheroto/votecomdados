@@ -337,9 +337,21 @@ const EMENDA_BASE = {
   localidadeTipo: "MUNICIPIO" as const,
 };
 
+/** O acervo inteiro, para as telas declararem a lacuna com numero vivo. */
+const NACIONAL_FIXTURE = {
+  linhas: 10, empenhado: 10000000, pago: 8000000, restoPago: 200000,
+  desembolso: 8200000,
+  porLocalidade: [
+    { localidade: "MULTIPLO" as const, linhas: 7, desembolso: 7000000 },
+    { localidade: "MUNICIPIO" as const, linhas: 3, desembolso: 1200000 },
+  ],
+  periodo: { anoInicio: 2023, anoFim: 2026 },
+};
+
 export const EMENDAS_POR_MUNICIPIO: Record<string, EmendasDoMunicipio> = {
   "SP/SANTOS": {
     municipio: "SANTOS", uf: "SP", temRegistro: true, parlamentares: 1,
+    nacional: NACIONAL_FIXTURE,
     resumo: {
       linhas: 2, empenhado: 1180960, pago: 0, restoPago: 599999.98,
       desembolso: 599999.98,
@@ -359,6 +371,7 @@ export const EMENDAS_POR_MUNICIPIO: Record<string, EmendasDoMunicipio> = {
   },
   "SP/TIETE": {
     municipio: "TIETE", uf: "SP", temRegistro: false, parlamentares: 0,
+    nacional: NACIONAL_FIXTURE,
     resumo: {
       linhas: 0, empenhado: 0, pago: 0, restoPago: 0, desembolso: 0,
       porLocalidade: [],

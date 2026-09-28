@@ -184,11 +184,10 @@ export async function obterEmendasDoMunicipio(
   const chave = `${uf.toUpperCase()}/${municipio.toUpperCase()}`;
   // Sem fixture, devolve "sem registro" em vez de null: é o caso comum, e
   // null significaria falha de rede.
+  const semRegistro = EMENDAS_POR_MUNICIPIO["SP/TIETE"];
   return comAtraso(EMENDAS_POR_MUNICIPIO[chave] ?? {
+    ...semRegistro,
     municipio: municipio.toUpperCase(), uf: uf.toUpperCase(),
-    temRegistro: false, parlamentares: 0,
-    resumo: { linhas: 0, empenhado: 0, pago: 0, restoPago: 0, desembolso: 0, porLocalidade: [] },
-    emendas: [],
   });
 }
 

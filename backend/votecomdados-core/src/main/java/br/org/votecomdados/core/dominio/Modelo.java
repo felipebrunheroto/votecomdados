@@ -244,6 +244,14 @@ public final class Modelo {
         boolean temRegistro,
         int parlamentares,
         ResumoDeEmendas resumo,
+        /**
+         * O acervo inteiro, para a tela declarar a lacuna com número vivo.
+         *
+         * <p>O resumo do município não serve para isso: ali todas as linhas
+         * são de município por construção, então a fração local é sempre
+         * 100% e não diz nada sobre o que ficou de fora.
+         */
+        ResumoDeEmendas nacional,
         List<Emenda> emendas
     ) {}
 }

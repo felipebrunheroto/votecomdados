@@ -6,10 +6,14 @@ import { formatarReais } from "@/lib/formato";
  *
  * <h2>Por que isso é obrigatório, e não um rodapé</h2>
  *
- * Em 2025, por valor pago: `MULTIPLO` 88,5%, `ESTADO` 7,5%, `MUNICIPIO`
- * 3,4%, `NACIONAL` 0,6%. Uma emenda "Múltiplo" cobre várias localidades numa
- * linha só, **sem discriminar quanto coube a cada uma**, e não é
- * decomponível: o endpoint de documentos da CGU traz só número de empenho.
+ * A maior parte do dinheiro é registrada sem município. A proporção exata
+ * VARIA por ano — medida em 28/09/2026 sobre 2023–2026, emendas com município
+ * são 23,3% das linhas em 2023 e 12,0% em 2025 —, por isso este componente
+ * calcula do resumo recebido em vez de citar um número escrito.
+ *
+ * Uma emenda "Múltiplo" cobre várias localidades numa linha só, **sem
+ * discriminar quanto coube a cada uma**, e não é decomponível: o endpoint de
+ * documentos da CGU traz só número de empenho.
  *
  * Sem este bloco, a página mostraria as emendas com cidade e calaria sobre o
  * resto — parecendo completa. O leitor concluiria que aquele é o total.
