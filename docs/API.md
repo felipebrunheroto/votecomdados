@@ -470,6 +470,7 @@ código IBGE nem na fonte nem no nosso schema.
   "uf": "SP",
   "temRegistro": true,
   "parlamentares": 1,
+  "nacional": { "...": "mesma forma de `resumo`, sobre o acervo inteiro" },
   "resumo": {
     "linhas": 2, "empenhado": 1180960.00,
     "pago": 0.00, "restoPago": 599999.98, "desembolso": 599999.98,
@@ -483,6 +484,17 @@ código IBGE nem na fonte nem no nosso schema.
 Um 404 diria "esta cidade não existe"; o correto é "esta fonte não diz nada
 sobre ela" — e é o caso de **9 em cada 10 municípios brasileiros**, porque só
 474 dos 5.570 aparecem nas emendas de 2025.
+
+**`nacional` é o acervo inteiro, e existe para a tela declarar a lacuna com
+número vivo.** O `resumo` do município não serve: ali todas as linhas são de
+município por construção, então a fração local é sempre 100% e não diz nada
+sobre o que ficou de fora.
+
+Esse texto nasceu com `88,5%` escrito à mão, medido sobre 2025 — o único ano
+carregado na época. Quando 2023, 2024 e 2026 entraram, a série mostrou que a
+proporção **varia muito**: emendas com município são 23,3% das linhas em 2023
+e 12,0% em 2025. O número fixo passou a afirmar ao leitor algo que não valia
+para o acervo que ele via.
 
 `temRegistro` distingue os dois zeros, e a distinção não é sutil: 43 cidades
 **receberam** dinheiro e apareceriam como zero se só `pago` fosse olhado; 40

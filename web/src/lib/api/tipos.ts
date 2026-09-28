@@ -301,6 +301,12 @@ export interface EmendasDoMunicipio {
   temRegistro: boolean;
   parlamentares: number;
   resumo: ResumoDeEmendas;
+  /**
+   * O acervo inteiro. O resumo do município não serve para declarar a
+   * lacuna: ali todas as linhas são de município por construção, então a
+   * fração local é sempre 100% e não diz nada sobre o que ficou de fora.
+   */
+  nacional: ResumoDeEmendas;
   emendas: Emenda[];
 }
 

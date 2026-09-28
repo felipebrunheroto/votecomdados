@@ -614,4 +614,39 @@ class ApiIntegracaoTest {
             .as("o fim vem da cobertura, nao das linhas deste politico")
             .isEqualTo(2026);
     }
+
+    /**
+     * O `nacional` é o acervo INTEIRO, não o recorte da cidade.
+     *
+     * <p>O resumo do município não serve para declarar a lacuna: ali todas as
+     * linhas são de município por construção, então a fração local é sempre
+     * 100% e não diz nada sobre o que ficou de fora. É esse número que faz a
+     * tela dizer "X% do dinheiro é registrado sem discriminar município" — e
+     * ele precisa vir vivo, porque a proporção varia por ano: emendas com
+     * município são 23,3% das linhas em 2023 e 12,0% em 2025.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void nacional_conta_o_acervo_inteiro_e_nao_so_a_cidade() {
+        semearEmenda("202541840301", null, "PE", "OLINDA", "MUNICIPIO",
+            "100", "0", null);
+        semearEmenda("202541840302", null, null, null, "MULTIPLO",
+            "900", "0", null);
+
+        var r = obterEntidade("/api/v1/emendas/municipios/PE/OLINDA");
+        var corpo = (Map<String, Object>) r.getBody();
+
+        var local = (Map<String, Object>) corpo.get("resumo");
+        var nacional = (Map<String, Object>) corpo.get("nacional");
+
+        assertThat(nacional).as("sem isto a tela nao tem como declarar a lacuna").isNotNull();
+        assertThat(((Number) nacional.get("linhas")).intValue())
+            .as("o nacional inclui a emenda MULTIPLO, que a cidade nao ve")
+            .isGreaterThan(((Number) local.get("linhas")).intValue());
+
+        var fatias = (List<Map<String, Object>>) nacional.get("porLocalidade");
+        assertThat(fatias).extracting(f -> f.get("localidade"))
+            .as("e por isso ele carrega as formas que ficaram de fora")
+            .contains("MULTIPLO");
+    }
 }

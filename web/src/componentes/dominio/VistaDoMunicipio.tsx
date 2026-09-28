@@ -3,6 +3,9 @@ import type { EmendasDoMunicipio } from "@/lib/api/tipos";
 import { formatarReais } from "@/lib/formato";
 import { NotaDeExecucao } from "@/componentes/dominio/LacunaDeEmendas";
 import { PeriodoDasEmendas } from "@/componentes/dominio/PeriodoDasEmendas";
+import {
+  ExplicacaoDaAusencia, LacunaNacional,
+} from "@/componentes/dominio/LacunaNacional";
 
 /**
  * A tela de uma cidade.
@@ -24,7 +27,13 @@ export function VistaDoMunicipio({ dados }: { dados: EmendasDoMunicipio }) {
       <p className="mt-1 text-sm text-texto-suave">
         Emendas parlamentares federais
       </p>
-      {dados.temRegistro ? <ComRegistro dados={dados} /> : <SemRegistro uf={dados.uf} />}
+      {dados.temRegistro
+        ? <ComRegistro dados={dados} />
+        : <SemRegistro
+            uf={dados.uf}
+            nacional={dados.nacional}
+            periodo={dados.resumo.periodo}
+          />}
     </>
   );
 }
@@ -109,12 +118,7 @@ function ComRegistro({ dados }: { dados: EmendasDoMunicipio }) {
         </table>
       </div>
 
-      <p className="mt-4 rounded border border-aviso-borda bg-aviso-fundo p-3 text-sm text-aviso-texto">
-        <strong>Esta lista é incompleta, e não há como completá-la.</strong> Em
-        2025, 88,5% do dinheiro de emendas foi registrado sem discriminar
-        município — parte dele pode ter vindo para cá sem aparecer aqui.{" "}
-        <strong>Um valor baixo nesta página não significa que a cidade recebeu pouco.</strong>
-      </p>
+      <LacunaNacional nacional={dados.nacional} />
 
       <NotaDeExecucao resumo={resumo} />
     </>
@@ -129,17 +133,25 @@ function ComRegistro({ dados }: { dados: EmendasDoMunicipio }) {
  * significa e, principalmente, <b>oferecer saída</b>: sem os links abaixo ela
  * seria um beco.
  */
-function SemRegistro({ uf }: { uf: string }) {
+function SemRegistro({
+  uf, nacional, periodo,
+}: {
+  uf: string;
+  nacional: EmendasDoMunicipio["nacional"];
+  periodo: EmendasDoMunicipio["resumo"]["periodo"];
+}) {
   return (
     <div className="mt-6 rounded border border-dashed border-borda-forte bg-fundo-sutil p-8 text-center">
-      <h2 className="text-lg font-semibold">
+      {/*
+        O periodo importa MAIS aqui do que na tela cheia: sem ele, "nenhuma
+        emenda" se le como "nunca", quando significa "nao no periodo que
+        carregamos".
+      */}
+      <PeriodoDasEmendas periodo={periodo} />
+      <h2 className="mt-2 text-lg font-semibold">
         Nenhuma emenda com esta cidade identificada na fonte
       </h2>
-      <p className="mx-auto mt-2 max-w-prose text-sm text-texto-suave">
-        Isso <strong>não</strong> significa que a cidade não recebeu emendas.
-        Significa que nenhuma emenda federal registrou este município como
-        destino — e <strong>88,5% do dinheiro é registrado sem dizer a cidade</strong>.
-      </p>
+      <ExplicacaoDaAusencia nacional={nacional} />
       <p className="mx-auto mt-3 max-w-prose text-sm text-texto-suave">
         Nove em cada dez municípios brasileiros estão nesta mesma situação.
       </p>

@@ -62,6 +62,7 @@ public class ConsultaEmendas {
             !emendas.isEmpty(),
             emendas.isEmpty() ? 0 : repositorio.parlamentaresDoMunicipio(uf, municipio),
             resumir(emendas),
+            repositorio.resumoNacional(),
             emendas);
     }
 
