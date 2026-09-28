@@ -389,6 +389,97 @@ paginação e sem filtro, porque essa é a única finalidade delas (achado B1,
 candidato como contexto; quem quer navegar usa
 `/politicos/{id}/proposicoes` ou `/politicos/{id}/votacoes`.
 
+## GET /politicos/{id}/emendas
+
+Emendas parlamentares de autoria da pessoa.
+
+**Query params**: `page`, `pageSize`.
+
+**Resposta `200`**
+```json
+{
+  "data": [
+    {
+      "codigo": "202541840004",
+      "ano": 2025,
+      "tipo": "Emenda Individual - Transferências com Finalidade Definida",
+      "autorNome": "FULANO DE TAL",
+      "politicoId": "a1000000-0000-4000-8000-000000000001",
+      "autorOrigemNome": null,
+      "municipio": "CARUARU",
+      "uf": "PE",
+      "localidadeBruta": "CARUARU - PE",
+      "localidadeTipo": "MUNICIPIO",
+      "empenhado": 820000.00,
+      "liquidado": 820000.00,
+      "pago": 820000.00,
+      "restoPago": 0.00,
+      "desembolso": 820000.00
+    }
+  ],
+  "resumo": {
+    "linhas": 44,
+    "empenhado": 41200000.00,
+    "pago": 38100000.00,
+    "restoPago": 3100000.00,
+    "desembolso": 41200000.00,
+    "porLocalidade": [
+      { "localidade": "MULTIPLO",  "linhas": 40, "desembolso": 38100000.00 },
+      { "localidade": "MUNICIPIO", "linhas": 4,  "desembolso": 3100000.00 }
+    ]
+  },
+  "pagination": { "page": 1, "pageSize": 20, "total": 44 }
+}
+```
+
+**`pago` e `restoPago` andam juntos, e `desembolso` é a soma.** Não é
+redundância. Em 2025 saíram R$ 32,5 bi por `pago` e R$ 6,1 bi por restos a
+pagar — **15,8% do desembolso**. Uma interface que mostre só `pago` mente
+sobre as 43 cidades (de 474) que têm `pago = 0` com restos maiores que zero.
+
+**`resumo.porLocalidade` existe para declarar a lacuna.** Em 2025, 88,5% do
+dinheiro foi registrado como `MULTIPLO` — várias localidades numa linha só,
+sem discriminar, e **não decomponível**: o endpoint de documentos da CGU traz
+só número de empenho. Sem este campo, uma página mostraria as emendas com
+cidade e calaria sobre o resto, parecendo completa.
+
+**`autorOrigemNome`** é preenchido quando a emenda foi transferida de outro
+parlamentar — 1,7% das linhas de 2025, R$ 473 milhões. Exibir só quem a detém
+hoje esconde metade da história.
+
+## GET /emendas/municipios/{uf}/{municipio}
+
+O que uma cidade recebeu. Sem paginação: a cidade mais citada de 2025 tem 17
+emendas.
+
+O nome casa **sem acento e sem caixa** — vem da CGU como texto livre, e não há
+código IBGE nem na fonte nem no nosso schema.
+
+**Resposta `200`**
+```json
+{
+  "municipio": "SANTOS",
+  "uf": "SP",
+  "temRegistro": true,
+  "parlamentares": 1,
+  "resumo": {
+    "linhas": 2, "empenhado": 1180960.00,
+    "pago": 0.00, "restoPago": 599999.98, "desembolso": 599999.98,
+    "porLocalidade": [{ "localidade": "MUNICIPIO", "linhas": 2, "desembolso": 599999.98 }]
+  },
+  "emendas": [ /* mesma forma de /politicos/{id}/emendas */ ]
+}
+```
+
+**Cidade sem registro responde `200` com `temRegistro: false`, não `404`.**
+Um 404 diria "esta cidade não existe"; o correto é "esta fonte não diz nada
+sobre ela" — e é o caso de **9 em cada 10 municípios brasileiros**, porque só
+474 dos 5.570 aparecem nas emendas de 2025.
+
+`temRegistro` distingue os dois zeros, e a distinção não é sutil: 43 cidades
+**receberam** dinheiro e apareceriam como zero se só `pago` fosse olhado; 40
+outras realmente não receberam nada.
+
 ## GET /meta/status
 
 Frescor dos dados: última ingestão bem-sucedida por fonte, lida de

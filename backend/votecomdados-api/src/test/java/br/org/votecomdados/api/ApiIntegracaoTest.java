@@ -459,4 +459,128 @@ class ApiIntegracaoTest {
         assertThat(r.getStatusCode().value()).isEqualTo(200);
         assertThat(r.getBody().get("status")).isEqualTo("UP");
     }
+
+    // ---- emendas parlamentares ------------------------------------------
+
+    private void semearEmenda(String codigo, String politicoId, String uf,
+                              String municipio, String tipoLocal,
+                              String pago, String restoPago, String origem) {
+        jdbc.sql("""
+                INSERT INTO emenda (codigo, ano, numero, tipo, codigo_autor,
+                    autor_nome, autor_origem_nome, politico_id,
+                    localidade_bruta, localidade_tipo, municipio_nome, uf,
+                    valor_empenhado, valor_liquidado, valor_pago, valor_resto_pago)
+                VALUES (:c, 2025, '0001', 'Emenda Individual', '4184',
+                    'FULANO DE TAL', :origem, CAST(:politico AS uuid),
+                    :bruta, CAST(:tipo AS localidade_emenda_enum), :mun, :uf,
+                    1000, 500, CAST(:pago AS numeric), CAST(:resto AS numeric))
+                ON CONFLICT (codigo) DO NOTHING
+                """)
+            .param("c", codigo).param("origem", origem)
+            .param("politico", politicoId)
+            .param("bruta", municipio == null ? "MÚLTIPLO" : municipio + " - " + uf)
+            .param("tipo", tipoLocal).param("mun", municipio).param("uf", uf)
+            .param("pago", pago).param("resto", restoPago)
+            .update();
+    }
+
+    /**
+     * Santos, 2025: pago R$ 0,00 e R$ 600 mil por restos a pagar. Uma API que
+     * devolvesse só `pago` faria a página dizer que a cidade não recebeu nada
+     * — e 43 das 474 cidades com emenda identificada estão nessa situação.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void municipio_com_pago_zero_e_restos_mostra_o_desembolso() {
+        semearEmenda("202541840101", null, "SP", "SANTOS", "MUNICIPIO",
+            "0", "599999.98", null);
+
+        var r = obterEntidade("/api/v1/emendas/municipios/SP/SANTOS");
+        assertThat(r.getStatusCode().value()).isEqualTo(200);
+        var corpo = (Map<String, Object>) r.getBody();
+        assertThat(corpo.get("temRegistro")).isEqualTo(true);
+
+        var resumo = (Map<String, Object>) corpo.get("resumo");
+        assertThat(new java.math.BigDecimal(resumo.get("pago").toString()))
+            .isEqualByComparingTo("0");
+        assertThat(new java.math.BigDecimal(resumo.get("desembolso").toString()))
+            .as("desembolso soma restos a pagar; so 'pago' diria zero")
+            .isEqualByComparingTo("599999.98");
+    }
+
+    /**
+     * Cidade sem emenda registrada responde 200, não 404.
+     *
+     * <p>Um 404 diria "esta cidade não existe". O certo é "esta fonte não diz
+     * nada sobre ela" — e é o caso de 9 em cada 10 municípios brasileiros,
+     * porque 88,5% do dinheiro é registrado sem discriminar município.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void municipio_sem_registro_responde_200_e_declara_a_ausencia() {
+        var r = obterEntidade("/api/v1/emendas/municipios/SP/TIETE");
+
+        assertThat(r.getStatusCode().value())
+            .as("404 diria que a cidade nao existe")
+            .isEqualTo(200);
+        var corpo = (Map<String, Object>) r.getBody();
+        assertThat(corpo.get("temRegistro")).isEqualTo(false);
+        assertThat((List<?>) corpo.get("emendas")).isEmpty();
+        assertThat(corpo.get("parlamentares")).isEqualTo(0);
+    }
+
+    /** O nome vem da CGU como texto livre; quem consulta digita como quiser. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void municipio_casa_sem_acento_e_sem_caixa() {
+        semearEmenda("202541840102", null, "SP", "SÃO PAULO", "MUNICIPIO",
+            "1000", "0", null);
+
+        for (String pedido : List.of("SAO PAULO", "são paulo", "São Paulo")) {
+            var r = obterEntidade("/api/v1/emendas/municipios/sp/" + pedido);
+            var corpo = (Map<String, Object>) r.getBody();
+            assertThat(corpo.get("temRegistro")).as(pedido).isEqualTo(true);
+        }
+    }
+
+    /**
+     * O resumo do político precisa contar o que NÃO tem cidade. Sem isso a
+     * página mostraria as emendas municipais e calaria sobre o resto,
+     * parecendo completa.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void resumo_do_politico_declara_o_que_nao_tem_cidade() {
+        semearEmenda("202541840103", COM_ATUACAO, "PE", "RECIFE", "MUNICIPIO",
+            "100", "0", null);
+        semearEmenda("202541840104", COM_ATUACAO, null, null, "MULTIPLO",
+            "900", "0", null);
+
+        var r = obterEntidade("/api/v1/politicos/" + COM_ATUACAO + "/emendas");
+        var corpo = (Map<String, Object>) r.getBody();
+        var resumo = (Map<String, Object>) corpo.get("resumo");
+
+        assertThat(new java.math.BigDecimal(resumo.get("desembolso").toString()))
+            .isEqualByComparingTo("1000");
+
+        var fatias = (List<Map<String, Object>>) resumo.get("porLocalidade");
+        assertThat(fatias).extracting(f -> f.get("localidade"))
+            .as("as duas formas aparecem, para a interface declarar a lacuna")
+            .contains("MUNICIPIO", "MULTIPLO");
+    }
+
+    /** Autoria transferida: exibir só quem a detém hoje esconde metade. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void autoria_transferida_aparece_na_resposta() {
+        semearEmenda("202541840105", null, "SP", "OSASCO", "MUNICIPIO",
+            "50", "0", "ALBERTO MOURAO");
+
+        var r = obterEntidade("/api/v1/emendas/municipios/SP/OSASCO");
+        var corpo = (Map<String, Object>) r.getBody();
+        var emendas = (List<Map<String, Object>>) corpo.get("emendas");
+
+        assertThat(emendas).hasSize(1);
+        assertThat(emendas.getFirst().get("autorOrigemNome")).isEqualTo("ALBERTO MOURAO");
+    }
 }
