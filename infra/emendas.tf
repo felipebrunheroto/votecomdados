@@ -117,3 +117,20 @@ resource "aws_lambda_function" "buscar_emendas" {
 
   depends_on = [aws_cloudwatch_log_group.buscar_emendas]
 }
+
+# Invocacao assincrona NAO pode repetir aqui.
+#
+# O padrao da Lambda e reexecutar duas vezes quando a invocacao por evento
+# falha -- desenhado para trabalho idempotente e curto. Esta funcao e o
+# oposto: 421 paginas contra uma API de terceiro com teto de 400 req/min.
+# Tres execucoes concorrentes do mesmo ano gastariam a cota tres vezes e
+# podem SUSPENDER o token, que e a punicao que a CGU aplica.
+#
+# Sem retentativa, uma falha e uma falha -- e o workflow a mostra, com o log
+# da funcao junto.
+resource "aws_lambda_function_event_invoke_config" "buscar_emendas" {
+  provider                     = aws.sao_paulo
+  function_name                = aws_lambda_function.buscar_emendas.function_name
+  maximum_retry_attempts       = 0
+  maximum_event_age_in_seconds = 900
+}

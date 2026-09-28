@@ -38,49 +38,62 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: sa-east-1
 
-      - name: invoca a Lambda
+      - name: invoca a Lambda e espera o arquivo
         env:
           ANO: ${{ inputs.ano }}
-          # UMA tentativa. O padrao da CLI reinvoca ao receber erro, e
-          # invocacao sincrona nao e idempotente do ponto de vista do tempo:
-          # em 27/09 um estouro de timeout virou seis reinvocacoes e o passo
-          # ficou pendurado por mais de uma hora, gastando minuto de CI e
-          # escondendo qual foi a falha.
-          AWS_MAX_ATTEMPTS: "1"
         run: |
           set -uo pipefail
           ano="${ANO:-$(date -u +%Y)}"
-          echo "buscando emendas de $ano"
+          conta=$(aws sts get-caller-identity --query Account --output text)
+          balde="votecomdados-ingestao-$conta"
+          chave="entrada/emendas-$ano.json"
 
-          # A função leva ~3min (421 páginas em 2025). O padrão da CLI é 60s,
-          # e sem isto o erro seria do cliente, não da Lambda -- confuso de
-          # diagnosticar justamente quando a Lambda funcionou.
+          # ASSINCRONA, de proposito. A invocacao sincrona foi tentada em
+          # 27/09 e a conexao caiu antes da resposta:
+          #
+          #   Connection was closed before we received a valid response
+          #   from endpoint URL: .../invocations
+          #
+          # O log da Lambda mostrava INIT_START e START -- a funcao rodou. O
+          # que nao sobrevive e a conexao HTTP mantida aberta por ~500s
+          # enquanto a funcao trabalha. Com --invocation-type Event a
+          # chamada volta na hora e o resultado se observa pelo S3, que e o
+          # proprio produto da funcao.
+          antes=$(aws s3api head-object --bucket "$balde" --key "$chave" \
+                    --query LastModified --output text 2>/dev/null || echo "nunca")
+          echo "arquivo antes: $antes"
+
           aws lambda invoke \
             --function-name votecomdados-buscar-emendas \
+            --invocation-type Event \
             --cli-binary-format raw-in-base64-out \
-            --cli-read-timeout 0 \
             --payload "{\"ano\":$ano}" \
-            saida.json > invocacao.json || true
+            aceite.json
+          echo "invocacao aceita; aguardando o arquivo aparecer"
 
-          echo "### Busca de emendas — $ano" >> "$GITHUB_STEP_SUMMARY"
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          cat saida.json >> "$GITHUB_STEP_SUMMARY"
-          echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat saida.json
+          # A funcao leva ~520s pela medicao do spike. 20 min de teto da
+          # folga sem mascarar travamento.
+          for _ in $(seq 1 80); do
+            sleep 15
+            agora=$(aws s3api head-object --bucket "$balde" --key "$chave" \
+                      --query LastModified --output text 2>/dev/null || echo "nunca")
+            if [ "$agora" != "$antes" ] && [ "$agora" != "nunca" ]; then
+              tamanho=$(aws s3api head-object --bucket "$balde" --key "$chave" \
+                          --query ContentLength --output text)
+              echo "pronto: $chave  ($tamanho bytes, $agora)"
+              {
+                echo "### Busca de emendas — $ano"
+                echo ""
+                echo "- objeto: \`s3://$balde/$chave\`"
+                echo "- tamanho: $tamanho bytes"
+                echo "- gravado em: $agora"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done
 
-          # A CLI devolve 0 mesmo quando a FUNÇÃO estourou: o erro vem no
-          # corpo, com FunctionError na resposta da invocação. Confiar no
-          # código de saída aqui deixaria o job verde com a busca falhada --
-          # exatamente o tipo de sucesso falso que este projeto persegue.
-          if grep -q '"FunctionError"' invocacao.json 2>/dev/null; then
-            echo "::error::a Lambda falhou; veja o corpo acima"
-            exit 1
-          fi
-          if ! grep -q '"emendas"' saida.json 2>/dev/null; then
-            echo "::error::resposta sem o campo 'emendas'; busca nao concluiu"
-            exit 1
-          fi
+          echo "::error::o arquivo nao apareceu em 20 min; veja o log da Lambda abaixo"
+          exit 1
 
       # Sem isto, diagnosticar falha exige credencial e console. O passo de
       # 27/09 ficou uma hora sem dizer NADA sobre o que a funcao estava
