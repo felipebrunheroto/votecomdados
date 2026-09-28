@@ -164,6 +164,22 @@ export async function listarEmendasDoPolitico(
 /**
  * O que uma cidade recebeu.
  *
+ * <h2>Campo novo da API chega OPCIONAL aqui</h2>
+ *
+ * O build do frontend chama a API de PRODUÇÃO, e um PR que toca backend e
+ * frontend dispara os dois deploys em paralelo. O build costuma vencer a
+ * corrida — aconteceu duas vezes em 28/09/2026 — e então a resposta vem da
+ * versão anterior da API, sem os campos recém-adicionados.
+ *
+ * Na primeira vez o efeito foi benigno: `listarMunicipiosComEmenda` caiu na
+ * fixture e gerou 1 cidade em vez de 474. Na segunda, `LacunaNacional`
+ * assumiu que `nacional` existia e derrubou o build inteiro, 60.553 páginas,
+ * com `Cannot read properties of undefined`.
+ *
+ * Por isso campo novo entra como opcional no tipo até o deploy seguinte: o
+ * compilador cobra o tratamento, e publicação não morre por enriquecimento
+ * ausente.
+ *
  * A API responde 200 com `temRegistro: false` para cidade sem registro — que
  * é o caso de 9 em cada 10 municípios —, então `null` aqui significa falha de
  * rede, não ausência de dado. Confundir os dois faria a página dizer "erro"
