@@ -1,6 +1,7 @@
 package br.org.votecomdados.core.dominio;
 
 import br.org.votecomdados.core.dominio.Enums.*;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -158,4 +159,82 @@ public final class Modelo {
      * de "ver todas as matérias" que o produto não decidiu oferecer.
      */
     public record ListaDeIds(List<Long> ids) {}
+
+    // --- Emendas parlamentares ------------------------------------------
+
+    /**
+     * Uma emenda, como a API a expõe.
+     *
+     * <p><b>{@code pago} e {@code restoPago} andam sempre juntos, e
+     * {@code desembolso} é a soma.</b> Não é redundância: em 2025 saíram
+     * R$ 32,5 bi por {@code pago} e R$ 6,1 bi por restos a pagar — 15,8% do
+     * total. E 43 das 474 cidades com emenda identificada têm {@code pago = 0}
+     * com restos pagos maiores que zero. Santos é uma delas: apareceria com
+     * "R$ 0,00 recebido" tendo recebido R$ 600 mil.
+     *
+     * <p>Uma interface que mostre só {@code pago} mente sobre essas cidades.
+     * O campo somado vem pronto do servidor justamente para que a escolha
+     * errada não seja a mais fácil de fazer.
+     *
+     * <p>{@code autorOrigemNome} é preenchido quando a emenda foi transferida
+     * de outro parlamentar — 1,7% das linhas de 2025. Exibir só quem a detém
+     * hoje esconde metade da história.
+     */
+    public record Emenda(
+        String codigo,
+        int ano,
+        String tipo,
+        String autorNome,
+        UUID politicoId,
+        String autorOrigemNome,
+        String municipio,
+        String uf,
+        String localidadeBruta,
+        LocalidadeEmenda localidadeTipo,
+        BigDecimal empenhado,
+        BigDecimal liquidado,
+        BigDecimal pago,
+        BigDecimal restoPago,
+        BigDecimal desembolso
+    ) {}
+
+    /**
+     * Quanto do dinheiro de um recorte tem município identificado.
+     *
+     * <p>Existe para a interface poder <b>declarar a lacuna</b> sem recalcular
+     * nada. Em 2025, por valor pago no país inteiro: MÚLTIPLO 88,5%, ESTADO
+     * 7,5%, MUNICÍPIO 3,4%, NACIONAL 0,6%. Uma página que some tudo sem
+     * separar afirma uma cobertura que não tem.
+     */
+    public record ResumoDeEmendas(
+        int linhas,
+        BigDecimal empenhado,
+        BigDecimal pago,
+        BigDecimal restoPago,
+        BigDecimal desembolso,
+        List<FatiaDeLocalidade> porLocalidade
+    ) {}
+
+    public record FatiaDeLocalidade(
+        LocalidadeEmenda localidade,
+        int linhas,
+        BigDecimal desembolso
+    ) {}
+
+    /**
+     * O que uma cidade recebeu.
+     *
+     * <p>{@code temRegistro} distingue os dois zeros, e a distinção não é
+     * sutil: <b>43 cidades receberam dinheiro e apareceriam como zero</b> se a
+     * interface olhasse só {@code pago}, enquanto 40 outras realmente não
+     * receberam nada. Sem este campo, "R$ 0,00" significa as duas coisas.
+     */
+    public record EmendasDoMunicipio(
+        String municipio,
+        String uf,
+        boolean temRegistro,
+        int parlamentares,
+        ResumoDeEmendas resumo,
+        List<Emenda> emendas
+    ) {}
 }

@@ -1,5 +1,6 @@
 package br.org.votecomdados.api.web;
 
+import br.org.votecomdados.api.servico.ConsultaEmendas;
 import br.org.votecomdados.api.servico.ConsultaPoliticos;
 import br.org.votecomdados.core.dominio.Enums.Cargo;
 import br.org.votecomdados.core.dominio.Modelo.*;
@@ -16,9 +17,11 @@ import org.springframework.web.bind.annotation.*;
 class PoliticoController {
 
     private final ConsultaPoliticos consulta;
+    private final ConsultaEmendas emendas;
 
-    PoliticoController(ConsultaPoliticos consulta) {
+    PoliticoController(ConsultaPoliticos consulta, ConsultaEmendas emendas) {
         this.consulta = consulta;
+        this.emendas = emendas;
     }
 
     /**
@@ -50,6 +53,23 @@ class PoliticoController {
         @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize
     ) {
         return consulta.proposicoes(id, page, pageSize);
+    }
+
+    /**
+     * Emendas de autoria do parlamentar.
+     *
+     * <p>A resposta traz {@code resumo} ao lado de {@code data}, e isso não é
+     * conveniência: sem ele a interface mostraria as emendas com cidade e
+     * calaria sobre o resto, parecendo completa. Em 2025, 88,5% do dinheiro
+     * foi registrado sem discriminar município.
+     */
+    @GetMapping("/{id}/emendas")
+    ConsultaEmendas.PaginaDeEmendas emendas(
+        @PathVariable UUID id,
+        @RequestParam(defaultValue = "1") @Min(1) int page,
+        @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize
+    ) {
+        return emendas.doPolitico(id, page, pageSize);
     }
 
     @GetMapping("/{id}/votacoes")

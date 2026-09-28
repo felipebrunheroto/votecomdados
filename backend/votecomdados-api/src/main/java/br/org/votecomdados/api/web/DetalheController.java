@@ -1,6 +1,7 @@
 package br.org.votecomdados.api.web;
 
 import br.org.votecomdados.api.servico.ConsultaDetalhes;
+import br.org.votecomdados.api.servico.ConsultaEmendas;
 import br.org.votecomdados.core.dominio.Modelo.*;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,9 +10,11 @@ import org.springframework.web.bind.annotation.*;
 class DetalheController {
 
     private final ConsultaDetalhes consulta;
+    private final ConsultaEmendas emendas;
 
-    DetalheController(ConsultaDetalhes consulta) {
+    DetalheController(ConsultaDetalhes consulta, ConsultaEmendas emendas) {
         this.consulta = consulta;
+        this.emendas = emendas;
     }
 
     @GetMapping("/proposicoes/{id}")
@@ -37,6 +40,21 @@ class DetalheController {
     @GetMapping("/votacoes")
     ListaDeIds idsDeVotacoes() {
         return consulta.todosOsIdsDeVotacoes();
+    }
+
+    /**
+     * O que uma cidade recebeu em emendas.
+     *
+     * <p>Sem paginação: a cidade mais citada de 2025 tem 17 emendas.
+     *
+     * <p>Cidade sem registro responde <b>200 com {@code temRegistro: false}</b>,
+     * não 404. Um 404 diria "esta cidade não existe"; o certo é "esta fonte não
+     * diz nada sobre ela" — e é o caso de 9 em cada 10 municípios brasileiros.
+     */
+    @GetMapping("/emendas/municipios/{uf}/{municipio}")
+    EmendasDoMunicipio emendasDoMunicipio(@PathVariable String uf,
+                                          @PathVariable String municipio) {
+        return emendas.doMunicipio(uf, municipio);
     }
 
     @GetMapping("/meta/status")
