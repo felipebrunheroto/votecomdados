@@ -289,6 +289,63 @@ Enquanto vier só `NAO_INFORMADO`, o TSE ainda não julgou.
 
 ---
 
+## 4.1.1 Emendas parlamentares
+
+Roda sozinha, todo dia:
+
+| horário UTC | o que acontece |
+|---|---|
+| **05:30** | Lambda em sa-east-1 busca o ano corrente na CGU e grava no S3 |
+| **06:45** | ingestão lê o JSON do bucket e carrega no banco |
+| 07:00 | Alesp fecha a fila e publica o pacote de dados abertos |
+
+**Por que a busca mora em São Paulo.** A API da CGU recusa requisição vinda
+de fora do Brasil. Medido em 26/09/2026, mesma URL e mesma chave: `200` de
+máquina doméstica brasileira, `401` do CloudShell em sa-east-1 (alcança, só
+quer a chave), e `504` da task em us-east-1 e de runner do GitHub Actions. O
+`504` vem **antes** da autenticação — de fora, mesmo sem chave, a resposta é
+`504` quando o esperado seria `401`.
+
+**Por que 06:45 e não outro horário.** Dentro da janela das demais fontes, de
+propósito. Cada publicação do frontend escreve 294.701 objetos, e uma fonte
+que conclui em hora isolada dispara mais uma reconstrução por dia:
+**US$ 44/mês** contra US$ 1,26 das páginas da funcionalidade inteira. Ver
+[CUSTOS_INFRA_AWS.md](CUSTOS_INFRA_AWS.md).
+
+### Refrescar o ano anterior — tarefa mensal
+
+O agendamento cobre só o **ano corrente**. O anterior continua mudando depois
+de virado: restos a pagar de 2025 são executados em 2026, e respondem por
+**15,8% do desembolso**. Uma cidade pode aparecer com `pago = R$ 0,00` e ter
+recebido de verdade — foi o caso de Santos em 2025, com R$ 600 mil.
+
+Uma vez por mês, em Actions:
+
+```
+Buscar emendas (CGU) → Run workflow → ano = <ano anterior>
+Rodar ingestão → INCREMENTAL → PORTAL_TRANSPARENCIA → ano = <ano anterior>
+```
+
+A primeira leva ~7 min e grava o JSON; a segunda carrega em ~30s.
+
+### Como saber se funcionou
+
+No log da ingestão, a linha que interessa:
+
+```
+emendas 2025: 6311 carregadas | 4710 com politico, 1601 sem
+emendas 2025: autores 452 resolvidos, 176 nao encontrados
+```
+
+**"Não encontrados" não é falha.** São emendas de bancada e comissão (que não
+têm parlamentar a quem atribuir) mais os ~8,3% de autores que não se
+candidataram em 2026 e por isso não existem na nossa base. A emenda entra com
+vínculo nulo em vez de ser descartada — omiti-la faria a página do município
+mostrar menos dinheiro do que a cidade recebeu.
+
+Se a ingestão falhar com *"não consegui ler s3://…"*, a busca do dia não
+rodou: dispare o workflow **Buscar emendas (CGU)** e repita a ingestão.
+
 ## 4.2 Quantas pessoas visitam o site
 
 O workflow **Verificar guardrails** publica, junto da checagem diária, as

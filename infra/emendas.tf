@@ -134,3 +134,73 @@ resource "aws_lambda_function_event_invoke_config" "buscar_emendas" {
   maximum_retry_attempts       = 0
   maximum_event_age_in_seconds = 900
 }
+
+# --- Agendamento da busca -----------------------------------------------
+#
+# 05:30 UTC (02:30 BRT), uma hora e quinze antes da ingestão das emendas
+# (06:45, ver scheduler.tf). A função levou 434,5s na primeira execução
+# real; a folga cobre um dia ruim da API sem que o job leia arquivo velho.
+
+resource "aws_iam_role" "agendar_busca_emendas" {
+  provider           = aws.sao_paulo
+  name               = "votecomdados-agendar-busca-emendas"
+  assume_role_policy = data.aws_iam_policy_document.scheduler_assume_sp.json
+}
+
+data "aws_iam_policy_document" "scheduler_assume_sp" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["scheduler.amazonaws.com"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "agendar_busca_emendas" {
+  statement {
+    sid       = "InvocarABusca"
+    actions   = ["lambda:InvokeFunction"]
+    resources = [aws_lambda_function.buscar_emendas.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "agendar_busca_emendas" {
+  provider = aws.sao_paulo
+  name     = "invocar-busca-emendas"
+  role     = aws_iam_role.agendar_busca_emendas.id
+  policy   = data.aws_iam_policy_document.agendar_busca_emendas.json
+}
+
+resource "aws_scheduler_schedule" "buscar_emendas_diaria" {
+  provider   = aws.sao_paulo
+  name       = "votecomdados-buscar-emendas-diaria"
+  group_name = "default"
+
+  schedule_expression          = "cron(30 5 * * ? *)" # 05:30 UTC = 02:30 BRT
+  schedule_expression_timezone = "UTC"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = aws_lambda_function.buscar_emendas.arn
+    role_arn = aws_iam_role.agendar_busca_emendas.arn
+
+    # Sem `ano`: a função usa o ano corrente. O ano ANTERIOR também muda
+    # depois de virado — restos a pagar de 2025 são executados em 2026 e
+    # respondem por 15,8% do desembolso —, mas refrescá-lo é tarefa mensal,
+    # não diária, e hoje se faz pelo workflow "Buscar emendas (CGU)".
+    # Registrado em docs/OPERACAO.md.
+    input = jsonencode({})
+
+    retry_policy {
+      # Zero, pela mesma razão do event_invoke_config acima: repetir a
+      # varredura gastaria a cota da CGU em triplo, e a punição por excesso
+      # é suspender o token. Se falhar, o dia seguinte tenta de novo e o job
+      # de ingestão acusa arquivo velho.
+      maximum_retry_attempts = 0
+    }
+  }
+}
