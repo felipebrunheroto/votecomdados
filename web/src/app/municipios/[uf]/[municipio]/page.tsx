@@ -23,7 +23,10 @@ export async function generateMetadata({ params }: Props) {
   const { uf, municipio } = await params;
   const nome = decodeURIComponent(municipio);
   return {
-    title: `Emendas para ${nome} — ${uf.toUpperCase()} · VoteComDados`,
+    // Sem " · VoteComDados": o layout ja aplica o template "%s · VoteComDados".
+    // Repetir aqui produzia "... · VoteComDados · VoteComDados", que foi o que
+    // producao mostrou em 28/09/2026.
+    title: `Emendas para ${nome} — ${uf.toUpperCase()}`,
     description:
       `Emendas parlamentares federais com destino a ${nome} (${uf.toUpperCase()}), ` +
       `com o que a fonte informa e o que ela não informa.`,
