@@ -77,6 +77,21 @@ export type AmbitoVotacao = "PLENARIO" | "COMISSAO";
 export type CasaLegislativa = "CAMARA" | "SENADO" | "ALESP";
 
 /**
+ * Em que recorte territorial a emenda foi registrada.
+ *
+ * Não é detalhe de catalogação: é a medida de quanto a fonte NÃO diz. Sobre
+ * 2025 inteiro, por valor pago, MULTIPLO responde por 88,5% do dinheiro e
+ * MUNICIPIO por 3,4%. Uma tela que some tudo sem separar por este campo
+ * afirma uma cobertura que não tem.
+ */
+export type LocalidadeEmenda =
+  | "MUNICIPIO"
+  | "ESTADO"
+  | "NACIONAL"
+  | "MULTIPLO"
+  | "OUTRO";
+
+/**
  * As três situações de cobertura, que geram mensagens diferentes ao eleitor.
  * Confundir as duas últimas seria desonesto: "não existe" e "não fizemos"
  * são coisas distintas (ver docs/ARQUITETURA.md § 5).
@@ -212,6 +227,71 @@ export interface ErroApi {
 /* ===========================================================================
    Detalhe de proposição e de votação, e frescor das fontes.
    =========================================================================== */
+
+/**
+ * Uma emenda parlamentar.
+ *
+ * `pago` e `restoPago` andam juntos, e `desembolso` é a soma. Não é
+ * redundância: em 2025 saíram R$ 32,5 bi por `pago` e R$ 6,1 bi por restos a
+ * pagar. Santos tem `pago = 0` e recebeu R$ 600 mil — **exibir `pago` como
+ * número principal mente sobre 43 das 474 cidades com emenda identificada.**
+ */
+export interface Emenda {
+  codigo: string;
+  ano: number;
+  tipo: string;
+  autorNome: string;
+  politicoId: string | null;
+  /** Preenchido quando a emenda foi transferida de outro parlamentar. */
+  autorOrigemNome: string | null;
+  municipio: string | null;
+  uf: string | null;
+  localidadeBruta: string;
+  localidadeTipo: LocalidadeEmenda;
+  empenhado: number | null;
+  liquidado: number | null;
+  pago: number | null;
+  restoPago: number | null;
+  desembolso: number;
+}
+
+export interface FatiaDeLocalidade {
+  localidade: LocalidadeEmenda;
+  linhas: number;
+  desembolso: number;
+}
+
+export interface ResumoDeEmendas {
+  linhas: number;
+  empenhado: number;
+  pago: number;
+  restoPago: number;
+  desembolso: number;
+  porLocalidade: FatiaDeLocalidade[];
+}
+
+export interface PaginaDeEmendas {
+  data: Emenda[];
+  resumo: ResumoDeEmendas;
+  pagination: Paginacao;
+}
+
+/**
+ * O que uma cidade recebeu.
+ *
+ * `temRegistro` distingue os dois zeros, e a distinção não é sutil: 43
+ * cidades receberam dinheiro e apareceriam como zero se só `pago` fosse
+ * olhado, enquanto 40 outras realmente não receberam. Sem este campo,
+ * "R$ 0,00" significaria as duas coisas.
+ */
+export interface EmendasDoMunicipio {
+  municipio: string;
+  uf: string;
+  temRegistro: boolean;
+  parlamentares: number;
+  resumo: ResumoDeEmendas;
+  emendas: Emenda[];
+}
 
 export interface AutorProposicao {
   /** `null` para coautor que não é candidato em 2026 — sem perfil, sem link. */

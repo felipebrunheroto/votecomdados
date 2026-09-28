@@ -51,6 +51,18 @@ class DetalheController {
      * não 404. Um 404 diria "esta cidade não existe"; o certo é "esta fonte não
      * diz nada sobre ela" — e é o caso de 9 em cada 10 municípios brasileiros.
      */
+    /**
+     * Cidades com ao menos uma emenda identificada.
+     *
+     * <p>Sem paginação — alimenta {@code generateStaticParams}, como
+     * {@code /proposicoes}. Não é rota de navegação.
+     */
+    @GetMapping("/emendas/municipios")
+    java.util.List<br.org.votecomdados.api.repositorio.EmendaRepositorio.Municipio>
+    municipiosComEmenda() {
+        return emendas.municipiosComEmenda();
+    }
+
     @GetMapping("/emendas/municipios/{uf}/{municipio}")
     EmendasDoMunicipio emendasDoMunicipio(@PathVariable String uf,
                                           @PathVariable String municipio) {

@@ -17,6 +17,7 @@
 import type {
   AutorProposicao, Cobertura, Pagina, PoliticoPerfil, PoliticoResumo, Proposicao,
   StatusFontes, VotacaoDetalhe, VotacaoDoPolitico,
+  EmendasDoMunicipio, PaginaDeEmendas,
 } from "./tipos";
 
 const COBERTURA_FEDERAL: Cobertura[] = [
@@ -319,3 +320,76 @@ export const STATUS_FONTES: StatusFontes = {
 
 /** Todas as proposições, achatadas — usado por `generateStaticParams`. */
 export const TODAS_PROPOSICOES: Proposicao[] = Object.values(PROPOSICOES).flat();
+
+// --- Emendas parlamentares ------------------------------------------------
+//
+// Os dois municípios cobrem os dois casos que a tela precisa distinguir, e
+// não são inventados: vêm das 6.311 emendas reais de 2025.
+//
+//   SANTOS    pago R$ 0,00 e R$ 600 mil por restos a pagar -- a cidade que
+//             apareceria como "não recebeu nada" se a tela mostrasse `pago`
+//   TIETE     nenhuma emenda identificada, como 9 em cada 10 municípios
+
+const EMENDA_BASE = {
+  ano: 2025,
+  tipo: "Emenda Individual - Transferências com Finalidade Definida",
+  liquidado: null as number | null,
+  localidadeTipo: "MUNICIPIO" as const,
+};
+
+export const EMENDAS_POR_MUNICIPIO: Record<string, EmendasDoMunicipio> = {
+  "SP/SANTOS": {
+    municipio: "SANTOS", uf: "SP", temRegistro: true, parlamentares: 1,
+    resumo: {
+      linhas: 2, empenhado: 1180960, pago: 0, restoPago: 599999.98,
+      desembolso: 599999.98,
+      porLocalidade: [{ localidade: "MUNICIPIO", linhas: 2, desembolso: 599999.98 }],
+    },
+    emendas: [
+      { ...EMENDA_BASE, codigo: "202540010001", autorNome: "JOAO CURY NETO",
+        politicoId: null, autorOrigemNome: "ALBERTO MOURAO",
+        municipio: "SANTOS", uf: "SP", localidadeBruta: "SANTOS - SP",
+        empenhado: 380000, pago: 0, restoPago: 190000, desembolso: 190000 },
+      { ...EMENDA_BASE, codigo: "202540010002", autorNome: "JOAO CURY NETO",
+        politicoId: null, autorOrigemNome: "ALBERTO MOURAO",
+        municipio: "SANTOS", uf: "SP", localidadeBruta: "SANTOS - SP",
+        empenhado: 800960, pago: 0, restoPago: 409999.98, desembolso: 409999.98 },
+    ],
+  },
+  "SP/TIETE": {
+    municipio: "TIETE", uf: "SP", temRegistro: false, parlamentares: 0,
+    resumo: {
+      linhas: 0, empenhado: 0, pago: 0, restoPago: 0, desembolso: 0,
+      porLocalidade: [],
+    },
+    emendas: [],
+  },
+};
+
+export const MUNICIPIOS_COM_EMENDA = [{ uf: "SP", municipio: "SANTOS" }];
+
+/** Emendas do candidato com atuação legislativa, com a lacuna representada. */
+export const EMENDAS_DO_POLITICO: Record<string, PaginaDeEmendas> = {
+  "a1000000-0000-4000-8000-000000000001": {
+    data: [
+      { ...EMENDA_BASE, codigo: "202541840001", autorNome: "FULANO",
+        politicoId: "a1000000-0000-4000-8000-000000000001", autorOrigemNome: null,
+        municipio: "SANTOS", uf: "SP", localidadeBruta: "SANTOS - SP",
+        empenhado: 380000, pago: 0, restoPago: 190000, desembolso: 190000 },
+      { ...EMENDA_BASE, codigo: "202541840002", autorNome: "FULANO",
+        politicoId: "a1000000-0000-4000-8000-000000000001", autorOrigemNome: null,
+        municipio: null, uf: null, localidadeBruta: "MÚLTIPLO",
+        localidadeTipo: "MULTIPLO", empenhado: 5000000, pago: 4200000,
+        restoPago: 0, desembolso: 4200000 },
+    ],
+    resumo: {
+      linhas: 2, empenhado: 5380000, pago: 4200000, restoPago: 190000,
+      desembolso: 4390000,
+      porLocalidade: [
+        { localidade: "MULTIPLO", linhas: 1, desembolso: 4200000 },
+        { localidade: "MUNICIPIO", linhas: 1, desembolso: 190000 },
+      ],
+    },
+    pagination: { page: 1, pageSize: 20, total: 2 },
+  },
+};

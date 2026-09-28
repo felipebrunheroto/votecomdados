@@ -113,12 +113,7 @@ const PARES = [
   ["tipo_job_enum", "TipoJob", null],
   ["motivo_rejeicao_enum", "MotivoRejeicao", null],
   ["metodo_resolucao_enum", "MetodoResolucao", null],
-  // TS null por ora. A API JA expoe `localidadeTipo` em
-  // /politicos/{id}/emendas e /emendas/municipios/{uf}/{municipio} -- e o
-  // campo e justamente o que permite declarar a lacuna de 88,5% --, mas o
-  // frontend ainda nao o consome. Vira "LocalidadeEmenda" no PR das telas, e
-  // ate la o null aqui e a verdade, nao um atalho.
-  ["localidade_emenda_enum", "LocalidadeEmenda", null],
+  ["localidade_emenda_enum", "LocalidadeEmenda", "LocalidadeEmenda"],
 ];
 
 const problemas = [];
