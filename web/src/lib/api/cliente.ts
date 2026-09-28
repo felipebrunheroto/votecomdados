@@ -7,12 +7,14 @@
  * consomem apenas os tipos de `tipos.ts`, que são o contrato de docs/API.md.
  */
 import {
-  DETALHES_PROPOSICAO, PERFIS, PROPOSICOES, RESUMOS, STATUS_FONTES,
+  DETALHES_PROPOSICAO, EMENDAS_DO_POLITICO, EMENDAS_POR_MUNICIPIO,
+  MUNICIPIOS_COM_EMENDA, PERFIS, PROPOSICOES, RESUMOS, STATUS_FONTES,
   TODAS_PROPOSICOES, VOTACOES, VOTACOES_DETALHE, paginar,
 } from "./fixtures";
 import type {
-  FiltroPoliticos, Pagina, PoliticoPerfil, PoliticoResumo, Proposicao,
-  ProposicaoDetalhe, StatusFontes, VotacaoDetalhe, VotacaoDoPolitico,
+  EmendasDoMunicipio, FiltroPoliticos, Pagina, PaginaDeEmendas, PoliticoPerfil,
+  PoliticoResumo, Proposicao, ProposicaoDetalhe, StatusFontes, VotacaoDetalhe,
+  VotacaoDoPolitico,
 } from "./tipos";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL;
@@ -137,6 +139,82 @@ export async function listarVotacoes(
  * quebrava o build inteiro contra a API real — este laço respeita o mesmo
  * limite que qualquer outro cliente.
  */
+/**
+ * Emendas de autoria do parlamentar.
+ *
+ * Devolve `null` quando a API falha, e a seção some — ausência de emenda é o
+ * caso de 19 em cada 20 candidatos, então uma aba vazia ou um erro visível
+ * seriam ruído em quase todo perfil.
+ */
+export async function listarEmendasDoPolitico(
+  id: string, page = 1, pageSize = 20,
+): Promise<PaginaDeEmendas | null> {
+  if (BASE) {
+    try {
+      return await buscarHttp<PaginaDeEmendas>(
+        `/politicos/${id}/emendas?page=${page}&pageSize=${pageSize}`,
+      );
+    } catch {
+      return null;
+    }
+  }
+  return comAtraso(EMENDAS_DO_POLITICO[id] ?? null);
+}
+
+/**
+ * O que uma cidade recebeu.
+ *
+ * A API responde 200 com `temRegistro: false` para cidade sem registro — que
+ * é o caso de 9 em cada 10 municípios —, então `null` aqui significa falha de
+ * rede, não ausência de dado. Confundir os dois faria a página dizer "erro"
+ * onde o certo é "esta fonte não diz nada sobre ela".
+ */
+export async function obterEmendasDoMunicipio(
+  uf: string, municipio: string,
+): Promise<EmendasDoMunicipio | null> {
+  if (BASE) {
+    try {
+      return await buscarHttp<EmendasDoMunicipio>(
+        `/emendas/municipios/${encodeURIComponent(uf)}/${encodeURIComponent(municipio)}`,
+      );
+    } catch {
+      return null;
+    }
+  }
+  const chave = `${uf.toUpperCase()}/${municipio.toUpperCase()}`;
+  // Sem fixture, devolve "sem registro" em vez de null: é o caso comum, e
+  // null significaria falha de rede.
+  return comAtraso(EMENDAS_POR_MUNICIPIO[chave] ?? {
+    municipio: municipio.toUpperCase(), uf: uf.toUpperCase(),
+    temRegistro: false, parlamentares: 0,
+    resumo: { linhas: 0, empenhado: 0, pago: 0, restoPago: 0, desembolso: 0, porLocalidade: [] },
+    emendas: [],
+  });
+}
+
+/**
+ * Cidades com ao menos uma emenda identificada — 474 das 5.570.
+ *
+ * Só alimenta `generateStaticParams`. Falha devolve lista vazia em vez de
+ * estourar: um build que quebra porque a API piscou é pior que um build sem
+ * as páginas de cidade, que o fallback de cliente cobre.
+ */
+export async function listarMunicipiosComEmenda(): Promise<
+  { uf: string; municipio: string }[]
+> {
+  if (BASE) {
+    try {
+      return await buscarHttp<{ uf: string; municipio: string }[]>("/emendas/municipios");
+    } catch {
+      // Lista vazia AQUI seria fatal: `output: export` recusa build com
+      // generateStaticParams vazio. As fixtures garantem ao menos uma rota, e
+      // todas as cidades reais continuam chegando pelo fallback de cliente.
+      return MUNICIPIOS_COM_EMENDA;
+    }
+  }
+  return comAtraso(MUNICIPIOS_COM_EMENDA);
+}
+
 export async function listarIdsParaPreRender(): Promise<string[]> {
   const TAMANHO = 100;
   const ids: string[] = [];

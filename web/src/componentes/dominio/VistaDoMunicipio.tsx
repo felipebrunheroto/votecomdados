@@ -1,0 +1,152 @@
+import Link from "next/link";
+import type { EmendasDoMunicipio } from "@/lib/api/tipos";
+import { formatarReais } from "@/lib/formato";
+import { NotaDeExecucao } from "@/componentes/dominio/LacunaDeEmendas";
+
+/**
+ * A tela de uma cidade.
+ *
+ * <h2>Por que é puramente de apresentação</h2>
+ *
+ * Ela é renderizada em dois lugares: no HTML pré-gerado das 474 cidades com
+ * dado, e no navegador pelo fallback de `not-found.tsx` para as outras 5.096.
+ * Se buscasse os dados sozinha, a primeira perderia o conteúdo no HTML — e
+ * perder isso foi exatamente o defeito que manteve `/sobre/` quebrada por
+ * semanas até 25/09/2026.
+ */
+export function VistaDoMunicipio({ dados }: { dados: EmendasDoMunicipio }) {
+  return (
+    <>
+      <h1 className="text-2xl font-semibold tracking-tight">
+        {dados.municipio} — {dados.uf}
+      </h1>
+      <p className="mt-1 text-sm text-texto-suave">
+        Emendas parlamentares federais
+      </p>
+      {dados.temRegistro ? <ComRegistro dados={dados} /> : <SemRegistro uf={dados.uf} />}
+    </>
+  );
+}
+
+function ComRegistro({ dados }: { dados: EmendasDoMunicipio }) {
+  const { resumo, emendas } = dados;
+
+  return (
+    <>
+      <dl className="mt-6 flex flex-wrap gap-8">
+        <div>
+          {/*
+            O número grande é DESEMBOLSO, não "pago". Santos tem pago R$ 0,00
+            e recebeu R$ 600 mil por restos a pagar; destacar "pago" diria que
+            a cidade não recebeu nada — e são 43 das 474 nessa situação.
+          */}
+          <dd className="text-3xl font-semibold tracking-tight tabular-nums">
+            {formatarReais(resumo.desembolso)}
+          </dd>
+          <dt className="text-sm text-texto-suave">recebidos, com origem identificada</dt>
+        </div>
+        <div>
+          <dd className="text-3xl font-semibold tracking-tight tabular-nums">
+            {dados.parlamentares}
+          </dd>
+          <dt className="text-sm text-texto-suave">
+            {dados.parlamentares === 1 ? "parlamentar" : "parlamentares"}
+          </dt>
+        </div>
+      </dl>
+
+      {resumo.restoPago > 0 && resumo.pago === 0 && (
+        <p className="mt-4 rounded border border-aviso-borda bg-aviso-fundo p-3 text-sm text-aviso-texto">
+          <strong>O orçamento do ano registra R$ 0,00 pago para esta cidade.</strong>{" "}
+          O dinheiro chegou por <strong>restos a pagar</strong> — orçamento de
+          anos anteriores executado agora. Uma leitura que olhasse só a coluna
+          &ldquo;pago&rdquo; diria que nada foi recebido.
+        </p>
+      )}
+
+      <div className="mt-6 overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-borda-forte text-left text-xs uppercase tracking-wide text-texto-tenue">
+              <th className="px-2 py-2 font-semibold">Autoria</th>
+              <th className="px-2 py-2 font-semibold">Ano</th>
+              <th className="px-2 py-2 text-right font-semibold">Empenhado</th>
+              <th className="px-2 py-2 text-right font-semibold">Desembolsado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {emendas.map((e) => (
+              <tr key={e.codigo} className="border-b border-borda last:border-0">
+                <td className="px-2 py-2">
+                  {e.politicoId ? (
+                    <Link href={`/politicos/${e.politicoId}/`} className="text-acento hover:underline">
+                      {e.autorNome}
+                    </Link>
+                  ) : (
+                    e.autorNome
+                  )}
+                  {/*
+                    Autoria transferida: 1,7% das linhas e R$ 473 mi em 2025.
+                    Exibir só quem a detém hoje esconde metade da história.
+                  */}
+                  {e.autorOrigemNome && (
+                    <span className="block text-xs text-texto-tenue">
+                      recebida de {e.autorOrigemNome}
+                    </span>
+                  )}
+                </td>
+                <td className="px-2 py-2 tabular-nums">{e.ano}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{formatarReais(e.empenhado)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{formatarReais(e.desembolso)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="mt-4 rounded border border-aviso-borda bg-aviso-fundo p-3 text-sm text-aviso-texto">
+        <strong>Esta lista é incompleta, e não há como completá-la.</strong> Em
+        2025, 88,5% do dinheiro de emendas foi registrado sem discriminar
+        município — parte dele pode ter vindo para cá sem aparecer aqui.{" "}
+        <strong>Um valor baixo nesta página não significa que a cidade recebeu pouco.</strong>
+      </p>
+
+      <NotaDeExecucao resumo={resumo} />
+    </>
+  );
+}
+
+/**
+ * A tela de 9 em cada 10 municípios.
+ *
+ * Só 474 dos 5.570 aparecem nas emendas de 2025. Esta não é a tela de
+ * exceção — é a comum, e por isso precisa dizer com clareza o que a ausência
+ * significa e, principalmente, <b>oferecer saída</b>: sem os links abaixo ela
+ * seria um beco.
+ */
+function SemRegistro({ uf }: { uf: string }) {
+  return (
+    <div className="mt-6 rounded border border-dashed border-borda-forte bg-fundo-sutil p-8 text-center">
+      <h2 className="text-lg font-semibold">
+        Nenhuma emenda com esta cidade identificada na fonte
+      </h2>
+      <p className="mx-auto mt-2 max-w-prose text-sm text-texto-suave">
+        Isso <strong>não</strong> significa que a cidade não recebeu emendas.
+        Significa que nenhuma emenda federal registrou este município como
+        destino — e <strong>88,5% do dinheiro é registrado sem dizer a cidade</strong>.
+      </p>
+      <p className="mx-auto mt-3 max-w-prose text-sm text-texto-suave">
+        Nove em cada dez municípios brasileiros estão nesta mesma situação.
+      </p>
+      <p className="mt-4 text-sm">
+        <Link href={`/?uf=${uf}`} className="text-acento hover:underline">
+          Ver candidatos de {uf}
+        </Link>
+        {" · "}
+        <Link href="/sobre/" className="text-acento hover:underline">
+          Como lemos os dados de emendas
+        </Link>
+      </p>
+    </div>
+  );
+}

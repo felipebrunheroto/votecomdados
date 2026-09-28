@@ -25,6 +25,11 @@ public class ConsultaEmendas {
 
     public record Paginacao(int page, int pageSize, int total) {}
 
+    /** Cidades com emenda identificada, para o pré-render do frontend. */
+    public List<EmendaRepositorio.Municipio> municipiosComEmenda() {
+        return repositorio.municipiosComEmenda();
+    }
+
     public PaginaDeEmendas doPolitico(UUID politicoId, int page, int pageSize) {
         int deslocamento = (page - 1) * pageSize;
         return new PaginaDeEmendas(

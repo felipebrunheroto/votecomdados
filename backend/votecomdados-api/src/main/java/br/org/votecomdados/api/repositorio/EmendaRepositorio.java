@@ -102,6 +102,28 @@ public class EmendaRepositorio {
             .query(EmendaRepositorio::linha).list();
     }
 
+    /**
+     * As cidades que têm ao menos uma emenda identificada.
+     *
+     * <p>Sem paginação, de propósito: alimenta {@code generateStaticParams} no
+     * build do frontend, como {@code /proposicoes} já faz. São 474 das 5.570 —
+     * as outras chegam pelo fallback de cliente, e pré-renderizar 5.096
+     * páginas idênticas de "nenhuma emenda identificada" custaria objetos em
+     * toda publicação sem ter o que indexar.
+     */
+    public List<Municipio> municipiosComEmenda() {
+        return jdbc.sql("""
+                SELECT DISTINCT uf, municipio_nome
+                  FROM emenda
+                 WHERE localidade_tipo = 'MUNICIPIO'
+                 ORDER BY uf, municipio_nome
+                """)
+            .query((r, i) -> new Municipio(r.getString("uf"), r.getString("municipio_nome")))
+            .list();
+    }
+
+    public record Municipio(String uf, String municipio) {}
+
     /** Quantos parlamentares distintos destinaram emenda à cidade. */
     public int parlamentaresDoMunicipio(String uf, String municipio) {
         return jdbc.sql("""

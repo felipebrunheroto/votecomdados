@@ -59,6 +59,25 @@ export function formatarNumero(n: number): string {
   return new Intl.NumberFormat("pt-BR").format(n);
 }
 
+const REAIS = new Intl.NumberFormat("pt-BR", {
+  style: "currency", currency: "BRL", maximumFractionDigits: 0,
+});
+
+/**
+ * Valor em reais, sem centavos.
+ *
+ * Emenda parlamentar é da ordem de centenas de milhares; centavo aqui é
+ * ruído que dificulta comparar duas linhas de olho.
+ *
+ * `null` vira travessão, nunca "R$ 0". A fonte devolve ausência quando o
+ * valor é ilegível, e exibir zero afirmaria que nada foi movido — que é
+ * diferente de "não sabemos".
+ */
+export function formatarReais(v: number | null | undefined): string {
+  if (v === null || v === undefined) return "—";
+  return REAIS.format(v);
+}
+
 const ROTULO_CARGO: Record<string, string> = {
   PRESIDENTE: "Presidente",
   VICE_PRESIDENTE: "Vice-presidente",

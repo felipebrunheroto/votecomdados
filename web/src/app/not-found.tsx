@@ -3,12 +3,17 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { obterPerfil, obterProposicao, obterVotacao } from "@/lib/api/cliente";
-import type { PoliticoPerfil, ProposicaoDetalhe, VotacaoDetalhe } from "@/lib/api/tipos";
+import {
+  obterEmendasDoMunicipio, obterPerfil, obterProposicao, obterVotacao,
+} from "@/lib/api/cliente";
+import type {
+  EmendasDoMunicipio, PoliticoPerfil, ProposicaoDetalhe, VotacaoDetalhe,
+} from "@/lib/api/tipos";
 import { PerfilDoPolitico } from "@/componentes/dominio/PerfilDoPolitico";
+import { VistaDoMunicipio } from "@/componentes/dominio/VistaDoMunicipio";
 import { DetalheDaProposicao } from "@/componentes/dominio/DetalheDaProposicao";
 import { DetalheDaVotacao } from "@/componentes/dominio/DetalheDaVotacao";
-import { Carregando } from "@/componentes/ui/Estados";
+import { Carregando, Erro } from "@/componentes/ui/Estados";
 
 /** `/politicos/{uuid}` — o mesmo formato que `generateStaticParams` recebe. */
 const ID_DE_POLITICO = /^\/politicos\/([0-9a-f-]{36})\/?$/;
@@ -19,6 +24,12 @@ const ID_DE_POLITICO = /^\/politicos\/([0-9a-f-]{36})\/?$/;
 // continuam existindo -- só chegam por aqui, montadas no navegador.
 const ID_DE_PROPOSICAO = /^\/proposicoes\/(\d+)\/?$/;
 const ID_DE_VOTACAO = /^\/votacoes\/(\d+)\/?$/;
+
+// `/municipios/SP/TIETE` — só as 474 cidades COM emenda são pré-renderizadas
+// (ver municipios/[uf]/[municipio]/page.tsx). As outras 5.096, que são a
+// maioria, chegam aqui. Sem esta linha elas mostrariam "Página não
+// encontrada" — o mesmo defeito que manteve /sobre/ quebrada até 25/09/2026.
+const MUNICIPIO = /^\/municipios\/([A-Za-z]{2})\/([^/]+)\/?$/;
 
 /**
  * A "casca renderizada no cliente" que `docs/FRONTEND.md` (e o comentário de
@@ -84,10 +95,19 @@ export default function NaoEncontrado() {
   const idDeCandidato = montado ? caminho.match(ID_DE_POLITICO)?.[1] : undefined;
   const idDeProposicao = montado ? caminho.match(ID_DE_PROPOSICAO)?.[1] : undefined;
   const idDeVotacao = montado ? caminho.match(ID_DE_VOTACAO)?.[1] : undefined;
+  const municipio = montado ? caminho.match(MUNICIPIO) : null;
 
   if (idDeCandidato) return <CascaDePerfil id={idDeCandidato} />;
   if (idDeProposicao) return <CascaDeProposicao id={idDeProposicao} />;
   if (idDeVotacao) return <CascaDeVotacao id={idDeVotacao} />;
+  if (municipio) {
+    return (
+      <CascaDeMunicipio
+        uf={municipio[1]}
+        nome={decodeURIComponent(municipio[2])}
+      />
+    );
+  }
 
   return (
     <div className="py-12 text-center">
@@ -104,6 +124,36 @@ export default function NaoEncontrado() {
         Ir para a busca
       </Link>
     </div>
+  );
+}
+
+/**
+ * A cidade sem pré-render, montada no navegador.
+ *
+ * <p>São 5.096 dos 5.570 municípios — a maioria. A tela que elas recebem é a
+ * de "nenhuma emenda identificada", e ela é a razão de este caminho existir:
+ * sem ele mostrariam "Página não encontrada", que diria à pessoa que a
+ * cidade dela não existe.
+ */
+function CascaDeMunicipio({ uf, nome }: { uf: string; nome: string }) {
+  const [dados, setDados] =
+    useState<EmendasDoMunicipio | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelado = false;
+    obterEmendasDoMunicipio(uf, nome).then((d) => {
+      if (!cancelado) setDados(d);
+    });
+    return () => { cancelado = true; };
+  }, [uf, nome]);
+
+  if (dados === undefined) return <Carregando rotulo="Carregando a cidade" />;
+  if (dados === null) return <Erro aoTentarNovamente={() => location.reload()} />;
+
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-8">
+      <VistaDoMunicipio dados={dados} />
+    </main>
   );
 }
 
