@@ -28,7 +28,8 @@ data "aws_iam_policy_document" "execucao_ecs_secrets" {
     resources = [
       aws_db_instance.principal.master_user_secret[0].secret_arn,
       aws_secretsmanager_secret.cpf_hmac_pepper.arn,
-      aws_secretsmanager_secret.portal_transparencia_chave.arn,
+      # A chave da CGU NAO entra aqui: quem a le e a Lambda em sa-east-1,
+      # com policy propria. Esta task nao fala com a CGU.
     ]
   }
 }

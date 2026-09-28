@@ -218,14 +218,18 @@ public class SeletorDeJob implements ApplicationRunner, ExitCodeGenerator {
                     return;
                 }
                 if (fonte == Fonte.PORTAL_TRANSPARENCIA) {
-                    // A CGU nao publica Last-Modified nem ETag, e os valores de
-                    // uma emenda mudam durante o ano inteiro -- empenhada em
-                    // marco, paga em outubro. Nao ha "so o que mudou" a pedir:
-                    // o ano e relido por completo, e o upsert atualiza.
+                    // O dado vem do S3, nao da API: a CGU recusa requisicao
+                    // de fora do Brasil, e esta task roda em us-east-1 (ver
+                    // JobDeEmendas). Quem busca e a Lambda em sa-east-1.
+                    //
+                    // O ano e relido por completo, e o upsert atualiza: a CGU
+                    // nao publica Last-Modified nem ETag, e os valores de uma
+                    // emenda mudam durante o ano -- empenhada em marco, paga
+                    // em outubro. Nao ha "so o que mudou" a pedir.
                     //
                     // O watermark e o instante da coleta, como na coorte do TSE.
                     int anoEmendas = inteiro(args, "ano", LocalDate.now().getYear());
-                    var r = emendas.carregar(anoEmendas);
+                    var r = emendas.carregar(anoEmendas, diretorioDeTrabalho());
                     publicarDadosAbertos(args);
                     controle.concluir(execucao, Instant.now(), r.emendas(), 0);
                     return;

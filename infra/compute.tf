@@ -180,13 +180,17 @@ resource "aws_ecs_task_definition" "ingestion" {
 
     environment = [
       { name = "DB_URL", value = "jdbc:postgresql://${aws_db_instance.principal.endpoint}/votecomdados" },
+      { name = "VOTECOMDADOS_BALDE_INGESTAO", value = aws_s3_bucket.ingestao.id },
     ]
 
+    # Sem VOTECOMDADOS_PORTAL_CHAVE: esta task NAO fala com a CGU. A API
+    # recusa requisicao de fora do Brasil e responde 504 daqui, entao a busca
+    # mora na Lambda em sa-east-1 -- que e a unica que precisa da chave.
+    # Menos um lugar onde o segredo existe.
     secrets = [
       { name = "DB_USER", valueFrom = "${aws_db_instance.principal.master_user_secret[0].secret_arn}:username::" },
       { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.principal.master_user_secret[0].secret_arn}:password::" },
       { name = "VOTECOMDADOS_CPF_PEPPER", valueFrom = aws_secretsmanager_secret.cpf_hmac_pepper.arn },
-      { name = "VOTECOMDADOS_PORTAL_CHAVE", valueFrom = aws_secretsmanager_secret.portal_transparencia_chave.arn },
     ]
 
     logConfiguration = {
