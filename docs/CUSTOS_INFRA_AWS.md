@@ -263,10 +263,33 @@ roteamento corrigido e o top-10 do relatório filtrando só páginas servidas
 (2xx/304), o relatório de **~02/10/2026** é a primeira medição honesta de se
 alguém chega nessas páginas.
 
-- Se `/proposicoes/` **não** aparecer no top-10: cortar o pré-render delas
-  resolve o custo inteiro, sem perda medível.
-- Se aparecer: discutir meio-termo — pré-renderizar só as mais acessadas, ou
-  só as da legislatura corrente com tramitação recente.
+### O critério, corrigido em 28/09/2026
+
+O critério original era "se `/proposicoes/` não aparecer no top-10". **Estava
+mal desenhado**, e teria dado a resposta errada: `/proposicoes/{id}` são 250
+mil endereços distintos, e nenhum deles isoladamente cabe num top-10 dominado
+pela home — mesmo que a família inteira receba tráfego relevante. O critério
+diria "corte" quase independentemente da realidade.
+
+O relatório diário passou a agregar **por família de rota**, e é esse número
+que decide:
+
+```
+| acessos | área            |
+|     217 | /               |
+|      33 | /proposicoes/*  |  <- este
+|      25 | /politicos/*    |
+```
+
+- Se `/proposicoes/*` e `/votacoes/*` somarem tráfego desprezível: cortar o
+  pré-render resolve o custo inteiro, sem perda medível.
+- Se somarem tráfego real: meio-termo — pré-renderizar só as mais acessadas,
+  ou só as da legislatura corrente com tramitação recente.
+
+A **medição** é automática e diária; a **decisão** não, de propósito. Cortar
+291 mil páginas é estrutural e dificilmente se desfaz sem um build inteiro;
+automatizá-la a partir de um limiar seria deixar uma escolha de produto na
+mão de uma regra que não sabe por que existe.
 
 Enquanto isso não acontece, não há pressa: o custo líquido é zero.
 
