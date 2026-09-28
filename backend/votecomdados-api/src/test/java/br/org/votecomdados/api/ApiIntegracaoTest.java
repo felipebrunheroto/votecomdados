@@ -583,4 +583,35 @@ class ApiIntegracaoTest {
         assertThat(emendas).hasSize(1);
         assertThat(emendas.getFirst().get("autorOrigemNome")).isEqualTo("ALBERTO MOURAO");
     }
+
+    /**
+     * O período é da COBERTURA, não do recorte consultado.
+     *
+     * <p>Sem ele a tela dizia "R$ 68.149.687 desembolsados no total", e "no
+     * total" era lido como "em geral" quando significava "em 2025" — o único
+     * ano carregado. Um parlamentar com emenda só em 2025 precisa continuar
+     * mostrando o intervalo inteiro: a ausência nos outros anos é informação
+     * dele, não limite nosso.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void resumo_declara_o_periodo_coberto_e_nao_o_do_recorte() {
+        semearEmenda("202341840201", COM_ATUACAO, "PE", "OLINDA", "MUNICIPIO",
+            "10", "0", null);
+        jdbc.sql("UPDATE emenda SET ano = 2023 WHERE codigo = '202341840201'").update();
+        semearEmenda("202641840202", null, "SP", "CAMPINAS", "MUNICIPIO",
+            "20", "0", null);
+        jdbc.sql("UPDATE emenda SET ano = 2026 WHERE codigo = '202641840202'").update();
+
+        // O politico so tem emenda de 2023, mas a base cobre 2023-2026.
+        var r = obterEntidade("/api/v1/politicos/" + COM_ATUACAO + "/emendas");
+        var resumo = (Map<String, Object>) ((Map<String, Object>) r.getBody()).get("resumo");
+        var periodo = (Map<String, Object>) resumo.get("periodo");
+
+        assertThat(periodo).as("sem periodo, 'no total' vira 'em geral'").isNotNull();
+        assertThat(periodo.get("anoInicio")).isEqualTo(2023);
+        assertThat(periodo.get("anoFim"))
+            .as("o fim vem da cobertura, nao das linhas deste politico")
+            .isEqualTo(2026);
+    }
 }

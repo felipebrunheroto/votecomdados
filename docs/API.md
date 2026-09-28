@@ -426,7 +426,8 @@ Emendas parlamentares de autoria da pessoa.
     "porLocalidade": [
       { "localidade": "MULTIPLO",  "linhas": 40, "desembolso": 38100000.00 },
       { "localidade": "MUNICIPIO", "linhas": 4,  "desembolso": 3100000.00 }
-    ]
+    ],
+    "periodo": { "anoInicio": 2023, "anoFim": 2026 }
   },
   "pagination": { "page": 1, "pageSize": 20, "total": 44 }
 }
@@ -442,6 +443,13 @@ dinheiro foi registrado como `MULTIPLO` — várias localidades numa linha só,
 sem discriminar, e **não decomponível**: o endpoint de documentos da CGU traz
 só número de empenho. Sem este campo, uma página mostraria as emendas com
 cidade e calaria sobre o resto, parecendo completa.
+
+**`resumo.periodo` é da COBERTURA, não do recorte consultado.** Um
+parlamentar com emenda só em 2025 continua recebendo o intervalo inteiro: a
+ausência nos outros anos é informação dele, não limite nosso. Sem este campo
+a tela dizia "R$ 68.149.687 desembolsados no total", e *"no total"* é lido
+como *"em geral"* quando significa *"no período que carregamos"*. É `null`
+enquanto não houver nenhuma emenda na base.
 
 **`autorOrigemNome`** é preenchido quando a emenda foi transferida de outro
 parlamentar — 1,7% das linhas de 2025, R$ 473 milhões. Exibir só quem a detém

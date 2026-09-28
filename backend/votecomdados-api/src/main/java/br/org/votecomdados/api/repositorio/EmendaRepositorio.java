@@ -3,6 +3,7 @@ package br.org.votecomdados.api.repositorio;
 import br.org.votecomdados.core.dominio.Enums.LocalidadeEmenda;
 import br.org.votecomdados.core.dominio.Modelo.Emenda;
 import br.org.votecomdados.core.dominio.Modelo.FatiaDeLocalidade;
+import br.org.votecomdados.core.dominio.Modelo.PeriodoCoberto;
 import br.org.votecomdados.core.dominio.Modelo.ResumoDeEmendas;
 import java.math.BigDecimal;
 import java.util.List;
@@ -124,6 +125,26 @@ public class EmendaRepositorio {
 
     public record Municipio(String uf, String municipio) {}
 
+    /**
+     * Anos que a base cobre — o menor e o maior com alguma emenda.
+     *
+     * <p>É propriedade da NOSSA cobertura, não do recorte consultado. Derivar
+     * o período das linhas exibidas diria "2025" para um parlamentar que só
+     * teve emenda naquele ano, sugerindo que é só disso que dispomos; e diria
+     * períodos diferentes em páginas diferentes, para o mesmo acervo.
+     *
+     * <p>Sem este rótulo a tela dizia "R$ 68.149.687 desembolsados no total",
+     * e "no total" era lido como "em geral" quando significava "em 2025".
+     * Omissão que engana é o que esta plataforma existe para não fazer.
+     */
+    public int[] periodoCoberto() {
+        var r = jdbc.sql("SELECT min(ano) AS ini, max(ano) AS fim FROM emenda")
+            .query().singleRow();
+        Object ini = r.get("ini");
+        if (ini == null) return null;
+        return new int[] { ((Number) ini).intValue(), ((Number) r.get("fim")).intValue() };
+    }
+
     /** Quantos parlamentares distintos destinaram emenda à cidade. */
     public int parlamentaresDoMunicipio(String uf, String municipio) {
         return jdbc.sql("""
@@ -179,12 +200,14 @@ public class EmendaRepositorio {
                 r.getInt("linhas"), r.getBigDecimal("desembolso")))
             .list();
 
+        int[] p = periodoCoberto();
         return new ResumoDeEmendas(
             ((Number) totais.get("linhas")).intValue(),
             (BigDecimal) totais.get("empenhado"),
             (BigDecimal) totais.get("pago"),
             (BigDecimal) totais.get("resto"),
             (BigDecimal) totais.get("desembolso"),
-            fatias);
+            fatias,
+            p == null ? null : new PeriodoCoberto(p[0], p[1]));
     }
 }

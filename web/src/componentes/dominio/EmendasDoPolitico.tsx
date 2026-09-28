@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { PaginaDeEmendas } from "@/lib/api/tipos";
 import { formatarReais } from "@/lib/formato";
 import { LacunaDeEmendas, NotaDeExecucao } from "@/componentes/dominio/LacunaDeEmendas";
+import { PeriodoDasEmendas } from "@/componentes/dominio/PeriodoDasEmendas";
 
 /**
  * O painel da aba "Emendas".
@@ -26,7 +27,11 @@ export function EmendasDoPolitico({ dados }: { dados: PaginaDeEmendas }) {
 
   return (
     <div>
-      <dl className="flex flex-wrap gap-8">
+      {/* Antes da cifra: o leitor precisa saber de quando e o numero ANTES
+          de le-lo, nao depois. */}
+      <PeriodoDasEmendas periodo={resumo.periodo} />
+
+      <dl className="mt-2 flex flex-wrap gap-8">
         <div>
           <dd className="text-2xl font-semibold tracking-tight tabular-nums">
             {formatarReais(resumo.desembolso)}

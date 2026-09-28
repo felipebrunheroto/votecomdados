@@ -5,6 +5,7 @@ import br.org.votecomdados.core.dominio.Enums.LocalidadeEmenda;
 import br.org.votecomdados.core.dominio.Modelo.Emenda;
 import br.org.votecomdados.core.dominio.Modelo.EmendasDoMunicipio;
 import br.org.votecomdados.core.dominio.Modelo.FatiaDeLocalidade;
+import br.org.votecomdados.core.dominio.Modelo.PeriodoCoberto;
 import br.org.votecomdados.core.dominio.Modelo.ResumoDeEmendas;
 import java.math.BigDecimal;
 import java.util.List;
@@ -71,7 +72,7 @@ public class ConsultaEmendas {
      * somar aqui evita um SQL agregado que precisaria repetir a comparação
      * sem acento do nome e correria o risco de divergir dela.
      */
-    private static ResumoDeEmendas resumir(List<Emenda> emendas) {
+    private ResumoDeEmendas resumir(List<Emenda> emendas) {
         BigDecimal empenhado = soma(emendas, Emenda::empenhado);
         BigDecimal pago = soma(emendas, Emenda::pago);
         BigDecimal resto = soma(emendas, Emenda::restoPago);
@@ -80,8 +81,10 @@ public class ConsultaEmendas {
             : List.of(new FatiaDeLocalidade(LocalidadeEmenda.MUNICIPIO,
                 emendas.size(), pago.add(resto)));
 
+        int[] p = repositorio.periodoCoberto();
         return new ResumoDeEmendas(emendas.size(), empenhado, pago, resto,
-            pago.add(resto), fatias);
+            pago.add(resto), fatias,
+            p == null ? null : new PeriodoCoberto(p[0], p[1]));
     }
 
     /** Ausência conta como zero na soma, sem apagar a linha. */

@@ -212,8 +212,17 @@ public final class Modelo {
         BigDecimal pago,
         BigDecimal restoPago,
         BigDecimal desembolso,
-        List<FatiaDeLocalidade> porLocalidade
+        List<FatiaDeLocalidade> porLocalidade,
+        /**
+         * Anos que a base cobre. É da NOSSA cobertura, não do recorte
+         * consultado — derivá-lo das linhas exibidas diria "2025" para quem só
+         * teve emenda naquele ano, sugerindo que é só disso que dispomos.
+         * Nulo enquanto não houver nenhuma emenda carregada.
+         */
+        PeriodoCoberto periodo
     ) {}
+
+    public record PeriodoCoberto(int anoInicio, int anoFim) {}
 
     public record FatiaDeLocalidade(
         LocalidadeEmenda localidade,

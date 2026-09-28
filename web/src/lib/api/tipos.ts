@@ -261,6 +261,11 @@ export interface FatiaDeLocalidade {
   desembolso: number;
 }
 
+export interface PeriodoCoberto {
+  anoInicio: number;
+  anoFim: number;
+}
+
 export interface ResumoDeEmendas {
   linhas: number;
   empenhado: number;
@@ -268,6 +273,12 @@ export interface ResumoDeEmendas {
   restoPago: number;
   desembolso: number;
   porLocalidade: FatiaDeLocalidade[];
+  /**
+   * Anos que a base cobre — da NOSSA cobertura, não do recorte exibido.
+   * Derivá-lo das linhas da tela diria "2025" para quem só teve emenda
+   * naquele ano, sugerindo que é só disso que dispomos.
+   */
+  periodo: PeriodoCoberto | null;
 }
 
 export interface PaginaDeEmendas {

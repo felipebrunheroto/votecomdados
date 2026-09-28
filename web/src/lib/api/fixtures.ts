@@ -344,6 +344,7 @@ export const EMENDAS_POR_MUNICIPIO: Record<string, EmendasDoMunicipio> = {
       linhas: 2, empenhado: 1180960, pago: 0, restoPago: 599999.98,
       desembolso: 599999.98,
       porLocalidade: [{ localidade: "MUNICIPIO", linhas: 2, desembolso: 599999.98 }],
+      periodo: { anoInicio: 2025, anoFim: 2025 },
     },
     emendas: [
       { ...EMENDA_BASE, codigo: "202540010001", autorNome: "JOAO CURY NETO",
@@ -361,6 +362,7 @@ export const EMENDAS_POR_MUNICIPIO: Record<string, EmendasDoMunicipio> = {
     resumo: {
       linhas: 0, empenhado: 0, pago: 0, restoPago: 0, desembolso: 0,
       porLocalidade: [],
+      periodo: { anoInicio: 2025, anoFim: 2025 },
     },
     emendas: [],
   },
@@ -389,6 +391,7 @@ export const EMENDAS_DO_POLITICO: Record<string, PaginaDeEmendas> = {
         { localidade: "MULTIPLO", linhas: 1, desembolso: 4200000 },
         { localidade: "MUNICIPIO", linhas: 1, desembolso: 190000 },
       ],
+      periodo: { anoInicio: 2025, anoFim: 2025 },
     },
     pagination: { page: 1, pageSize: 20, total: 2 },
   },
