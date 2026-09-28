@@ -30,7 +30,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="font-semibold tracking-tight text-texto">
               VoteComDados
             </Link>
-            <nav aria-label="Principal">
+            {/* flex e gap porque agora sao dois links: com um so, o nav nao
+                precisava de espacamento e nao tinha. */}
+            <nav aria-label="Principal" className="flex items-center gap-4">
+              <Link href="/municipios" className="text-sm text-texto-suave hover:text-texto">
+                Emendas por município
+              </Link>
               <Link href="/sobre" className="text-sm text-texto-suave hover:text-texto">
                 Sobre os dados
               </Link>
