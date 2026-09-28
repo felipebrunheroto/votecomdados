@@ -327,9 +327,53 @@ jobs:
               # subnotifica justamente quem volta ao site. Redirecionamento
               # (301/302) fica de fora -- e salto, nao leitura.
               if ($status !~ /^2[0-9][0-9]$/ && $status != 304) next
-              print caminho
+
+              print "PAGINA " caminho
+
+              # A FAMILIA da rota, no mesmo fluxo e com prefixo.
+              #
+              # O top-10 por URL nao responde a pergunta que decide o
+              # pre-render: /proposicoes/{id} sao 250 mil enderecos distintos,
+              # e nenhum deles isoladamente cabe num top-10 dominado pela
+              # home -- mesmo que a familia inteira receba trafego relevante.
+              #
+              # split, e nao sub com captura: o sub do awk NAO tem
+              # retrovisor de grupo, so `&` para o casamento inteiro. A
+              # primeira versao disto emitiu o literal "\\1*" para todas as
+              # linhas de profundidade maior que um.
+              n = split(caminho, partes, "/")
+              if (caminho == "/") familia = "/"
+              else if (n <= 3) familia = caminho      # "/sobre/" -> "", "sobre", ""
+              else familia = "/" partes[2] "/*"
+              print "FAMILIA " familia
             }
-          ' cru/tudo.txt | sort | uniq -c | sort -rn | head -10 > topo.txt || true
+          ' cru/tudo.txt > classificadas.txt || true
+
+          grep '^PAGINA ' classificadas.txt | cut -d' ' -f2- \
+            | sort | uniq -c | sort -rn | head -10 > topo.txt || true
+          grep '^FAMILIA ' classificadas.txt | cut -d' ' -f2- \
+            | sort | uniq -c | sort -rn > familias.txt || true
+
+          {
+            echo ""
+            echo "### Acessos por área do site (7 dias)"
+            echo ""
+            if [ -s familias.txt ]; then
+              echo "| acessos | área |"
+              echo "|---|---|"
+              while read -r n familia; do
+                echo "| $n | \`$familia\` |"
+              done < familias.txt
+              echo ""
+              echo "_Agregado por família de rota. É o número que decide se vale"
+              echo "pré-renderizar \`/proposicoes/*\` e \`/votacoes/*\` — 291 mil"
+              echo "páginas que respondem por quase todo o custo de S3. O top-10 por"
+              echo "URL abaixo não serve para isso: são 250 mil endereços distintos,"
+              echo "e nenhum cabe sozinho num top-10 dominado pela home._"
+            else
+              echo "Sem linhas de página no período."
+            fi
+          } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
 
           {
             echo ""
