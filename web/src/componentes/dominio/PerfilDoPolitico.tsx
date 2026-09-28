@@ -3,7 +3,6 @@ import type { PoliticoPerfil } from "@/lib/api/tipos";
 import { rotularCargo, rotularStatusCandidatura, registroEmSituacaoAdversa } from "@/lib/formato";
 import { AbasDeAtuacao } from "@/componentes/dominio/AbasDeAtuacao";
 import { AvisoDeCobertura } from "@/componentes/dominio/AvisoDeCobertura";
-import { EmendasDoPolitico } from "@/componentes/dominio/EmendasDoPolitico";
 import { TrajetoriaPolitica } from "@/componentes/dominio/TrajetoriaPolitica";
 
 /**
@@ -72,8 +71,6 @@ export function PerfilDoPolitico({ perfil }: { perfil: PoliticoPerfil }) {
           trajetoria={perfil.trajetoria}
         />
       </section>
-
-      <EmendasDoPolitico politicoId={perfil.id} />
 
       <AvisoDeCobertura cobertura={perfil.cobertura} />
 
