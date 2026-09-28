@@ -1,56 +1,32 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { listarEmendasDoPolitico } from "@/lib/api/cliente";
 import type { PaginaDeEmendas } from "@/lib/api/tipos";
 import { formatarReais } from "@/lib/formato";
 import { LacunaDeEmendas, NotaDeExecucao } from "@/componentes/dominio/LacunaDeEmendas";
 
 /**
- * Emendas de autoria do parlamentar.
+ * O painel da aba "Emendas".
  *
- * <h2>A seção só existe quando há dado</h2>
+ * <h2>Puramente de apresentação</h2>
  *
- * Apenas 1.066 das 20.874 pessoas da base exerceram mandato federal — 5,1%.
- * Os outros 94,9% <b>nunca terão emenda</b>, e não por falta de coleta: quem
- * nunca exerceu mandato federal não indica emenda ao orçamento da União.
+ * Quem busca é {@link AbasDeAtuacao}, porque a aba só deve EXISTIR quando há
+ * emenda — e isso precisa ser sabido antes de montar a lista de abas. Buscar
+ * aqui dentro obrigaria a aba a aparecer primeiro e sumir depois, ou a exibir
+ * um vazio que não se aplica a 94,9% da base.
  *
- * Uma aba "Emendas" vazia em 19 de cada 20 perfis seria ruído, e pior:
- * sugeriria ausência de algo que deveria estar lá. Por isso o componente
- * devolve `null` — não um estado vazio.
+ * <h2>A ordem dos blocos não é estética</h2>
  *
- * <h2>Carregado no cliente</h2>
- *
- * O perfil é pré-renderizado para a minoria com atuação legislativa, e as
- * emendas mudam ao longo do ano (empenhado em março, pago em outubro). Buscar
- * no cliente evita que o HTML congele um número que envelhece.
+ * A lacuna vem logo abaixo da cifra e ANTES da tabela. Posta depois, o leitor
+ * já formou a conclusão — vê três linhas, soma de olho, e conclui que aquilo
+ * é o total. A ressalva precisa chegar junto com o número que ela qualifica,
+ * não como nota de rodapé depois da evidência.
  */
-export function EmendasDoPolitico({ politicoId }: { politicoId: string }) {
-  const [dados, setDados] = useState<PaginaDeEmendas | null>(null);
-  const [carregando, setCarregando] = useState(true);
-
-  useEffect(() => {
-    let vivo = true;
-    listarEmendasDoPolitico(politicoId)
-      .then((r) => { if (vivo) setDados(r); })
-      .finally(() => { if (vivo) setCarregando(false); });
-    return () => { vivo = false; };
-  }, [politicoId]);
-
-  // Nem "carregando", nem "nenhuma emenda": silêncio. Ver o javadoc acima.
-  if (carregando || !dados || dados.resumo.linhas === 0) return null;
-
+export function EmendasDoPolitico({ dados }: { dados: PaginaDeEmendas }) {
   const { resumo, data } = dados;
   const comCidade = data.filter((e) => e.localidadeTipo === "MUNICIPIO");
 
   return (
-    <section aria-labelledby="titulo-emendas" className="mt-8">
-      <h2 id="titulo-emendas" className="text-lg font-semibold tracking-tight">
-        Emendas ao orçamento
-      </h2>
-
-      <dl className="mt-4 flex flex-wrap gap-8">
+    <div>
+      <dl className="flex flex-wrap gap-8">
         <div>
           <dd className="text-2xl font-semibold tracking-tight tabular-nums">
             {formatarReais(resumo.desembolso)}
@@ -62,12 +38,17 @@ export function EmendasDoPolitico({ politicoId }: { politicoId: string }) {
             {comCidade.length}
           </dd>
           <dt className="text-sm text-texto-suave">
-            {comCidade.length === 1 ? "emenda com cidade" : "emendas com cidade identificada"}
+            {comCidade.length === 1
+              ? "emenda com cidade identificada"
+              : "emendas com cidade identificada"}
           </dt>
         </div>
       </dl>
 
-      {comCidade.length > 0 && (
+      {/* Antes da tabela, de propósito. Ver o javadoc acima. */}
+      <LacunaDeEmendas resumo={resumo} />
+
+      {comCidade.length > 0 ? (
         <div className="mt-4 overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
@@ -88,6 +69,15 @@ export function EmendasDoPolitico({ politicoId }: { politicoId: string }) {
                     >
                       {e.municipio} — {e.uf}
                     </Link>
+                    {/*
+                      Autoria transferida: 1,7% das linhas e R$ 473 mi em 2025.
+                      Exibir só quem a detém hoje esconde metade da história.
+                    */}
+                    {e.autorOrigemNome && (
+                      <span className="block text-xs text-texto-tenue">
+                        recebida de {e.autorOrigemNome}
+                      </span>
+                    )}
                   </td>
                   <td className="px-2 py-2 tabular-nums">{e.ano}</td>
                   <td className="px-2 py-2 text-right tabular-nums">
@@ -101,10 +91,15 @@ export function EmendasDoPolitico({ politicoId }: { politicoId: string }) {
             </tbody>
           </table>
         </div>
+      ) : (
+        <p className="mt-4 text-sm text-texto-suave">
+          Nenhuma das emendas deste parlamentar tem município identificado na
+          fonte — todas foram registradas como &ldquo;Múltiplo&rdquo;, por
+          estado, ou de alcance nacional.
+        </p>
       )}
 
-      <LacunaDeEmendas resumo={resumo} />
       <NotaDeExecucao resumo={resumo} />
-    </section>
+    </div>
   );
 }

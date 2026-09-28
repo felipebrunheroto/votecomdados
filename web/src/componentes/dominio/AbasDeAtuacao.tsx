@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listarProposicoes, listarVotacoes } from "@/lib/api/cliente";
-import type { Candidatura, Cobertura, Proposicao, VotacaoDoPolitico } from "@/lib/api/tipos";
+import {
+  listarEmendasDoPolitico, listarProposicoes, listarVotacoes,
+} from "@/lib/api/cliente";
+import type {
+  Candidatura, Cobertura, PaginaDeEmendas, Proposicao, VotacaoDoPolitico,
+} from "@/lib/api/tipos";
 import { Abas } from "../ui/Abas";
 import { Carregando, Erro, Vazio } from "../ui/Estados";
 import { ListaProposicoes } from "./ListaProposicoes";
 import { ListaVotacoes } from "./ListaVotacoes";
+import { EmendasDoPolitico } from "./EmendasDoPolitico";
 
 /**
  * Explica uma aba vazia usando a cobertura declarada pela API.
@@ -148,22 +153,61 @@ function PainelVotacoes({ id, cobertura, trajetoria }: Contexto) {
   return <ListaVotacoes itens={itens} />;
 }
 
+/**
+ * A aba "Emendas" só EXISTE quando há emenda.
+ *
+ * <p>Apenas 1.066 das 20.874 pessoas da base exerceram mandato federal — 5,1%.
+ * Os outros 94,9% <b>nunca terão</b> emenda, e não por falta de coleta: quem
+ * nunca teve mandato federal não indica emenda ao orçamento da União.
+ *
+ * <p>Uma aba permanente, vazia em 19 de cada 20 perfis, sugeriria ausência de
+ * algo que deveria estar lá — o oposto do que a plataforma existe para fazer.
+ * Por isso a busca acontece AQUI, antes de montar a lista de abas, e não
+ * dentro do painel: o painel não teria como impedir a aba de aparecer.
+ */
+function useEmendas(id: string) {
+  const [dados, setDados] = useState<PaginaDeEmendas | null>(null);
+  const [chaveAtual, setChaveAtual] = useState(id);
+
+  if (id !== chaveAtual) {
+    setChaveAtual(id);
+    setDados(null);
+  }
+
+  useEffect(() => {
+    let cancelado = false;
+    listarEmendasDoPolitico(id).then((r) => {
+      if (!cancelado) setDados(r);
+    });
+    return () => { cancelado = true; };
+  }, [id]);
+
+  return dados;
+}
+
 export function AbasDeAtuacao({ id, cobertura, trajetoria }: Contexto) {
-  return (
-    <Abas
-      rotuloLista="Atuação legislativa"
-      abas={[
-        {
-          id: "proposicoes",
-          rotulo: "Projetos apresentados",
-          conteudo: <PainelProposicoes id={id} cobertura={cobertura} trajetoria={trajetoria} />,
-        },
-        {
-          id: "votacoes",
-          rotulo: "Votações",
-          conteudo: <PainelVotacoes id={id} cobertura={cobertura} trajetoria={trajetoria} />,
-        },
-      ]}
-    />
-  );
+  const emendas = useEmendas(id);
+
+  const abas = [
+    {
+      id: "proposicoes",
+      rotulo: "Projetos apresentados",
+      conteudo: <PainelProposicoes id={id} cobertura={cobertura} trajetoria={trajetoria} />,
+    },
+    {
+      id: "votacoes",
+      rotulo: "Votações",
+      conteudo: <PainelVotacoes id={id} cobertura={cobertura} trajetoria={trajetoria} />,
+    },
+  ];
+
+  if (emendas && emendas.resumo.linhas > 0) {
+    abas.push({
+      id: "emendas",
+      rotulo: "Emendas ao orçamento",
+      conteudo: <EmendasDoPolitico dados={emendas} />,
+    });
+  }
+
+  return <Abas rotuloLista="Atuação legislativa" abas={abas} />;
 }
