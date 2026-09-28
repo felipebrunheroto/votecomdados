@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { EmendasDoMunicipio } from "@/lib/api/tipos";
 import { formatarReais } from "@/lib/formato";
 import { NotaDeExecucao } from "@/componentes/dominio/LacunaDeEmendas";
+import { PeriodoDasEmendas } from "@/componentes/dominio/PeriodoDasEmendas";
 
 /**
  * A tela de uma cidade.
@@ -33,7 +34,11 @@ function ComRegistro({ dados }: { dados: EmendasDoMunicipio }) {
 
   return (
     <>
-      <dl className="mt-6 flex flex-wrap gap-8">
+      <div className="mt-6">
+        <PeriodoDasEmendas periodo={resumo.periodo} />
+      </div>
+
+      <dl className="mt-2 flex flex-wrap gap-8">
         <div>
           {/*
             O número grande é DESEMBOLSO, não "pago". Santos tem pago R$ 0,00
