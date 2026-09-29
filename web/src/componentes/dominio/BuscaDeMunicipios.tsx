@@ -46,14 +46,29 @@ export function BuscaDeMunicipios() {
   const [erro, setErro] = useState(false);
   const [termo, setTermo] = useState("");
 
+  /*
+   * Carrega na PRIMEIRA interacao, nao ao montar.
+   *
+   * Este componente vive na home, e a home e visitada por quem quer
+   * candidato tambem. Baixar 164 KB de municipios mais a lista de quem tem
+   * emenda em toda visita cobraria de todo mundo por uma busca que a maioria
+   * nao vai usar -- exatamente o custo que a carga sob demanda existia para
+   * evitar quando a busca tinha pagina propria.
+   *
+   * O disparo e no foco, nao na digitacao: quando a pessoa termina de
+   * escrever a primeira letra o arquivo ja esta a caminho.
+   */
+  const [ativado, setAtivado] = useState(false);
+
   useEffect(() => {
+    if (!ativado) return;
     let vivo = true;
     fetch("/municipios.json")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d: Municipio[]) => { if (vivo) setTodos(d); })
       .catch(() => { if (vivo) setErro(true); });
     return () => { vivo = false; };
-  }, []);
+  }, [ativado]);
 
   /*
    * A marcacao e buscada AQUI, no navegador, e nao passada pelo servidor.
@@ -73,6 +88,7 @@ export function BuscaDeMunicipios() {
    * visita, em vez de congelar num HTML por dias.
    */
   useEffect(() => {
+    if (!ativado) return;
     let vivo = true;
     const base = process.env.NEXT_PUBLIC_API_URL;
     if (!base) return;
@@ -83,7 +99,7 @@ export function BuscaDeMunicipios() {
       // que nao marcar, porque afirma ausencia que pode nao existir.
       .catch(() => {});
     return () => { vivo = false; };
-  }, []);
+  }, [ativado]);
 
   const comDado = useMemo(
     () => new Set(comEmenda.map((m) => `${m.uf}/${semAcento(m.municipio)}`)),
@@ -107,7 +123,8 @@ export function BuscaDeMunicipios() {
         id="busca-municipio"
         type="search"
         value={termo}
-        onChange={(e) => setTermo(e.target.value)}
+        onFocus={() => setAtivado(true)}
+        onChange={(e) => { setAtivado(true); setTermo(e.target.value); }}
         placeholder="Nome do município"
         autoComplete="off"
         className="w-full rounded-padrao border border-borda-forte bg-superficie px-3 py-2
@@ -120,7 +137,12 @@ export function BuscaDeMunicipios() {
         </p>
       )}
 
-      {!erro && termo.trim().length >= 2 && resultados.length === 0 && todos && (
+      {/* Enquanto a lista nao chegou, "nenhum municipio" seria mentira. */}
+      {!erro && ativado && !todos && termo.trim().length >= 2 && (
+        <p className="mt-4 text-sm text-texto-suave">Carregando municípios…</p>
+      )}
+
+      {!erro && todos && termo.trim().length >= 2 && resultados.length === 0 && (
         <p className="mt-4 text-sm text-texto-suave">
           Nenhum município com esse nome.
         </p>
