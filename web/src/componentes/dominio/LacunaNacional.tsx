@@ -50,6 +50,15 @@ export function LacunaNacional({ nacional }: { nacional?: ResumoDeEmendas | null
  * Devolve `null` — e não zero — quando o resumo falta ou vem vazio: zero
  * afirmaria que todo o dinheiro tem cidade, que é o oposto da verdade.
  */
+/**
+ * Municípios do Brasil, conforme o IBGE.
+ *
+ * Constante de verdade, ao contrário dos outros números desta tela: o último
+ * município brasileiro foi criado em 2013. Mora aqui e em
+ * `public/municipios.json`, que é a lista completa usada pela busca.
+ */
+const TOTAL_DE_MUNICIPIOS = 5571;
+
 function fracaoSemMunicipio(n?: ResumoDeEmendas | null): number | null {
   if (!n || !Array.isArray(n.porLocalidade) || !(n.desembolso > 0)) return null;
   const comCidade =
@@ -72,6 +81,15 @@ export function ExplicacaoDaAusencia({ nacional }: { nacional?: ResumoDeEmendas 
         <> — e <strong>{percentual}% do dinheiro é registrado sem dizer a cidade</strong></>
       )}
       .
+      {typeof nacional?.municipiosComRegistro === "number" && (
+        <>
+          {" "}
+          Dos <strong>{TOTAL_DE_MUNICIPIOS.toLocaleString("pt-BR")}</strong>{" "}
+          municípios do país, apenas{" "}
+          <strong>{nacional.municipiosComRegistro.toLocaleString("pt-BR")}</strong>{" "}
+          aparecem com alguma emenda.
+        </>
+      )}
     </p>
   );
 }

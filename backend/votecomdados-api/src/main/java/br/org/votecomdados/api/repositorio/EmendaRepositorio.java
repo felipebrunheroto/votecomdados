@@ -221,6 +221,11 @@ public class EmendaRepositorio {
                 r.getInt("linhas"), r.getBigDecimal("desembolso")))
             .list();
 
+        int comRegistro = jdbc.sql("""
+                SELECT count(DISTINCT (uf, municipio_nome)) FROM emenda
+                 WHERE localidade_tipo = 'MUNICIPIO'
+                """).query(Integer.class).single();
+
         int[] p = periodoCoberto();
         return new ResumoDeEmendas(
             ((Number) totais.get("linhas")).intValue(),
@@ -229,6 +234,7 @@ public class EmendaRepositorio {
             (BigDecimal) totais.get("resto"),
             (BigDecimal) totais.get("desembolso"),
             fatias,
-            p == null ? null : new PeriodoCoberto(p[0], p[1]));
+            p == null ? null : new PeriodoCoberto(p[0], p[1]),
+            comRegistro);
     }
 }

@@ -219,7 +219,17 @@ public final class Modelo {
          * teve emenda naquele ano, sugerindo que é só disso que dispomos.
          * Nulo enquanto não houver nenhuma emenda carregada.
          */
-        PeriodoCoberto periodo
+        PeriodoCoberto periodo,
+        /**
+         * Quantos municípios distintos têm ao menos uma emenda registrada.
+         *
+         * <p>É a terceira vez que um número desses vira afirmação que apodrece:
+         * "474 de 5.570" foi medido com um ano carregado, e virou 1.596 quando
+         * quatro entraram. A tela dizia ao leitor "nove em cada dez municípios
+         * estão nesta situação" quando já eram sete. Vindo daqui, o texto fica
+         * certo sozinho a cada ano que entra.
+         */
+        int municipiosComRegistro
     ) {}
 
     public record PeriodoCoberto(int anoInicio, int anoFim) {}

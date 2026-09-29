@@ -85,7 +85,10 @@ public class ConsultaEmendas {
         int[] p = repositorio.periodoCoberto();
         return new ResumoDeEmendas(emendas.size(), empenhado, pago, resto,
             pago.add(resto), fatias,
-            p == null ? null : new PeriodoCoberto(p[0], p[1]));
+            p == null ? null : new PeriodoCoberto(p[0], p[1]),
+            // Do acervo, nao deste municipio: serve para a tela dizer quantas
+            // cidades estao na mesma situacao.
+            repositorio.resumoNacional().municipiosComRegistro());
     }
 
     /** Ausência conta como zero na soma, sem apagar a linha. */
