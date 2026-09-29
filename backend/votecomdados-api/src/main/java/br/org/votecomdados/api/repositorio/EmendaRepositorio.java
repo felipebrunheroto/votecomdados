@@ -145,6 +145,32 @@ public class EmendaRepositorio {
         return new int[] { ((Number) ini).intValue(), ((Number) r.get("fim")).intValue() };
     }
 
+    /**
+     * Todas as emendas de município, agrupadas por "UF/CIDADE".
+     *
+     * <p>Uma consulta no lugar de 1.596. São ~4 mil linhas — a tabela inteira
+     * de emendas com município identificado.
+     */
+    public java.util.Map<String, List<Emenda>> emendasPorMunicipio() {
+        var todas = jdbc.sql("SELECT " + COLUNAS + """
+                  FROM emenda e
+                 WHERE e.localidade_tipo = 'MUNICIPIO'
+                 ORDER BY e.uf, e.municipio_nome, e.ano DESC,
+                          coalesce(e.valor_pago, 0) + coalesce(e.valor_resto_pago, 0) DESC,
+                          e.codigo
+                """)
+            .query(EmendaRepositorio::linha).list();
+
+        // LinkedHashMap preserva a ordem do ORDER BY: o build gera as paginas
+        // nessa sequencia, e ordem estavel deixa o diff de publicacao legivel.
+        var porCidade = new java.util.LinkedHashMap<String, List<Emenda>>();
+        for (Emenda e : todas) {
+            porCidade.computeIfAbsent(e.uf() + "/" + e.municipio(), k -> new java.util.ArrayList<>())
+                .add(e);
+        }
+        return porCidade;
+    }
+
     /** Quantos parlamentares distintos destinaram emenda à cidade. */
     public int parlamentaresDoMunicipio(String uf, String municipio) {
         return jdbc.sql("""

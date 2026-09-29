@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { listarMunicipiosComEmenda, obterEmendasDoMunicipio } from "@/lib/api/cliente";
+import { listarDadosDeMunicipios } from "@/lib/api/cliente";
 import { VistaDoMunicipio } from "@/componentes/dominio/VistaDoMunicipio";
 
 /**
@@ -13,7 +13,7 @@ import { VistaDoMunicipio } from "@/componentes/dominio/VistaDoMunicipio";
  * página vazia não tem o que indexar. Ver CUSTOS_INFRA_AWS.md.
  */
 export async function generateStaticParams() {
-  const municipios = await listarMunicipiosComEmenda();
+  const municipios = await listarDadosDeMunicipios();
   return municipios.map((m) => ({ uf: m.uf, municipio: m.municipio }));
 }
 
@@ -35,10 +35,18 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function PaginaDoMunicipio({ params }: Props) {
   const { uf, municipio } = await params;
-  const dados = await obterEmendasDoMunicipio(uf, decodeURIComponent(municipio));
+  const nome = decodeURIComponent(municipio);
 
-  // `null` é falha de rede, não ausência de dado: cidade sem registro vem
-  // com 200 e `temRegistro: false`.
+  // Do lote, não de uma chamada por página: com 1.596 cidades, uma chamada
+  // cada estourava o limite do WAF e TODAS saíam como "não encontrada".
+  const todos = await listarDadosDeMunicipios();
+  const dados = todos.find(
+    (m) => m.uf === uf.toUpperCase() && m.municipio === nome.toUpperCase(),
+  );
+
+  // Só se chega aqui quando generateStaticParams devolveu uma cidade que o
+  // lote não contém -- incoerência real, não ausência de dado. Cidade sem
+  // registro nem entra na lista: ela chega pelo fallback de cliente.
   if (!dados) notFound();
 
   return (

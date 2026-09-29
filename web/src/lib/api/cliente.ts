@@ -162,6 +162,32 @@ export async function listarEmendasDoPolitico(
 }
 
 /**
+ * Todas as cidades de uma vez, buscadas UMA vez por processo.
+ *
+ * <h2>Por que isto existe</h2>
+ *
+ * O build faz uma página por cidade. Com 474 cidades, uma chamada por página
+ * passava; com 1.596 o runner estourou o limite do WAF -- 600 requisições por
+ * IP a cada 5 minutos -- e passou a receber 403. O cliente traduzia o erro em
+ * `null`, a página chamava `notFound()`, e 1.596 páginas foram publicadas
+ * como "não encontrada" sem nada acusar. A plataforma bloqueou o próprio
+ * build.
+ *
+ * A promessa fica no módulo: o Next gera em vários processos, então são
+ * poucas chamadas -- uma por processo -- no lugar de mil e seiscentas.
+ */
+let dadosDeMunicipios: Promise<EmendasDoMunicipio[]> | null = null;
+
+export function listarDadosDeMunicipios(): Promise<EmendasDoMunicipio[]> {
+  if (!dadosDeMunicipios) {
+    dadosDeMunicipios = BASE
+      ? buscarHttp<EmendasDoMunicipio[]>("/emendas/municipios/dados")
+      : Promise.resolve(Object.values(EMENDAS_POR_MUNICIPIO));
+  }
+  return dadosDeMunicipios;
+}
+
+/**
  * O que uma cidade recebeu.
  *
  * <h2>Campo novo da API chega OPCIONAL aqui</h2>
