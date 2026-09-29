@@ -328,7 +328,7 @@ export const TODAS_PROPOSICOES: Proposicao[] = Object.values(PROPOSICOES).flat()
 //
 //   SANTOS    pago R$ 0,00 e R$ 600 mil por restos a pagar -- a cidade que
 //             apareceria como "não recebeu nada" se a tela mostrasse `pago`
-//   TIETE     nenhuma emenda identificada, como 9 em cada 10 municípios
+//   TIETE     nenhuma emenda identificada -- o caso da MAIORIA das cidades
 
 const EMENDA_BASE = {
   ano: 2025,
@@ -346,6 +346,7 @@ const NACIONAL_FIXTURE = {
     { localidade: "MUNICIPIO" as const, linhas: 3, desembolso: 1200000 },
   ],
   periodo: { anoInicio: 2023, anoFim: 2026 },
+  municipiosComRegistro: 1596,
 };
 
 export const EMENDAS_POR_MUNICIPIO: Record<string, EmendasDoMunicipio> = {
@@ -357,6 +358,7 @@ export const EMENDAS_POR_MUNICIPIO: Record<string, EmendasDoMunicipio> = {
       desembolso: 599999.98,
       porLocalidade: [{ localidade: "MUNICIPIO", linhas: 2, desembolso: 599999.98 }],
       periodo: { anoInicio: 2025, anoFim: 2025 },
+      municipiosComRegistro: 1596,
     },
     emendas: [
       { ...EMENDA_BASE, codigo: "202540010001", autorNome: "JOAO CURY NETO",
@@ -376,6 +378,7 @@ export const EMENDAS_POR_MUNICIPIO: Record<string, EmendasDoMunicipio> = {
       linhas: 0, empenhado: 0, pago: 0, restoPago: 0, desembolso: 0,
       porLocalidade: [],
       periodo: { anoInicio: 2025, anoFim: 2025 },
+      municipiosComRegistro: 1596,
     },
     emendas: [],
   },
@@ -405,6 +408,7 @@ export const EMENDAS_DO_POLITICO: Record<string, PaginaDeEmendas> = {
         { localidade: "MUNICIPIO", linhas: 1, desembolso: 190000 },
       ],
       periodo: { anoInicio: 2025, anoFim: 2025 },
+      municipiosComRegistro: 1596,
     },
     pagination: { page: 1, pageSize: 20, total: 2 },
   },

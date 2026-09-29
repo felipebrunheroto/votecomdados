@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { listarMunicipiosComEmenda } from "@/lib/api/cliente";
 import { BuscaDeMunicipios } from "@/componentes/dominio/BuscaDeMunicipios";
 
 export const metadata: Metadata = {
@@ -21,9 +20,7 @@ export const metadata: Metadata = {
  * existia pelo caminho do candidato, que é o enquadramento com risco de virar
  * ranking.
  */
-export default async function PaginaDeMunicipios() {
-  const comEmenda = await listarMunicipiosComEmenda();
-
+export default function PaginaDeMunicipios() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Emendas por município</h1>
@@ -31,7 +28,7 @@ export default async function PaginaDeMunicipios() {
         Procure sua cidade para ver quais emendas parlamentares federais a
         fonte registra com destino a ela.
       </p>
-      <BuscaDeMunicipios comEmenda={comEmenda} />
+      <BuscaDeMunicipios />
     </main>
   );
 }

@@ -40,12 +40,9 @@ function semAcento(s: string) {
  * Embuti-los no bundle cobraria o custo de todo visitante, inclusive de quem
  * nunca usa a busca.
  */
-export function BuscaDeMunicipios({
-  comEmenda,
-}: {
-  comEmenda: { uf: string; municipio: string }[];
-}) {
+export function BuscaDeMunicipios() {
   const [todos, setTodos] = useState<Municipio[] | null>(null);
+  const [comEmenda, setComEmenda] = useState<{ uf: string; municipio: string }[]>([]);
   const [erro, setErro] = useState(false);
   const [termo, setTermo] = useState("");
 
@@ -58,12 +55,41 @@ export function BuscaDeMunicipios({
     return () => { vivo = false; };
   }, []);
 
-  // Quem tem emenda registrada, para marcar na lista. O nome vem da CGU como
-  // texto livre, então a chave é normalizada dos dois lados.
+  /*
+   * A marcacao e buscada AQUI, no navegador, e nao passada pelo servidor.
+   *
+   * Na primeira versao ela vinha como prop do componente de pagina, resolvida
+   * no build. Em 29/09/2026 essa chamada falhou em silencio -- o `catch` do
+   * cliente devolveu a fixture -- e a pagina foi publicada conhecendo UMA
+   * cidade de 1.596. A busca marcou tudo como "sem registro na fonte",
+   * inclusive cidades que tinham emenda.
+   *
+   * Nada acusou: o build gerou as 1.596 paginas normalmente, porque a OUTRA
+   * chamada a mesma funcao funcionou. Dois resultados diferentes no mesmo
+   * build, e o errado saiu publicado.
+   *
+   * Buscado em tempo de execucao, o dado ainda fica fresco entre publicacoes
+   * -- ele cresce a cada ano carregado -- e a falha some sozinha na proxima
+   * visita, em vez de congelar num HTML por dias.
+   */
+  useEffect(() => {
+    let vivo = true;
+    const base = process.env.NEXT_PUBLIC_API_URL;
+    if (!base) return;
+    fetch(`${base}/emendas/municipios`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d: { uf: string; municipio: string }[]) => { if (vivo) setComEmenda(d); })
+      // Falha aqui NAO marca nada como "sem registro": marcar errado e pior
+      // que nao marcar, porque afirma ausencia que pode nao existir.
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+
   const comDado = useMemo(
     () => new Set(comEmenda.map((m) => `${m.uf}/${semAcento(m.municipio)}`)),
     [comEmenda],
   );
+  const sabemosQuemTem = comEmenda.length > 0;
 
   const resultados = useMemo(() => {
     if (!todos) return [];
@@ -118,7 +144,8 @@ export function BuscaDeMunicipios({
                     antes de clicar. Nao marcar seria esconder a lacuna
                     justamente no momento da escolha.
                   */}
-                  {temDado ? (
+                  {/* Sem a lista, nao afirma nada -- ver o efeito acima. */}
+                  {!sabemosQuemTem ? null : temDado ? (
                     <span className="shrink-0 text-xs text-texto-suave">
                       com emenda registrada
                     </span>

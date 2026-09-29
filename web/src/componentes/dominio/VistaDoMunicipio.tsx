@@ -12,7 +12,7 @@ import {
  *
  * <h2>Por que é puramente de apresentação</h2>
  *
- * Ela é renderizada em dois lugares: no HTML pré-gerado das 474 cidades com
+ * Ela é renderizada em dois lugares: no HTML pré-gerado das cidades com
  * dado, e no navegador pelo fallback de `not-found.tsx` para as outras 5.096.
  * Se buscasse os dados sozinha, a primeira perderia o conteúdo no HTML — e
  * perder isso foi exatamente o defeito que manteve `/sobre/` quebrada por
@@ -52,7 +52,7 @@ function ComRegistro({ dados }: { dados: EmendasDoMunicipio }) {
           {/*
             O número grande é DESEMBOLSO, não "pago". Santos tem pago R$ 0,00
             e recebeu R$ 600 mil por restos a pagar; destacar "pago" diria que
-            a cidade não recebeu nada — e são 43 das 474 nessa situação.
+            a cidade não recebeu nada, e não são poucas nessa situação.
           */}
           <dd className="text-3xl font-semibold tracking-tight tabular-nums">
             {formatarReais(resumo.desembolso)}
@@ -126,12 +126,12 @@ function ComRegistro({ dados }: { dados: EmendasDoMunicipio }) {
 }
 
 /**
- * A tela de 9 em cada 10 municípios.
+ * A tela da MAIORIA dos municípios.
  *
- * Só 474 dos 5.570 aparecem nas emendas de 2025. Esta não é a tela de
- * exceção — é a comum, e por isso precisa dizer com clareza o que a ausência
- * significa e, principalmente, <b>oferecer saída</b>: sem os links abaixo ela
- * seria um beco.
+ * Quantos exatamente varia com os anos carregados — eram 474 de 5.571 com um
+ * ano, 1.596 com quatro —, e por isso o número vem da API e não daqui. Esta
+ * não é a tela de exceção: precisa dizer com clareza o que a ausência
+ * significa e, principalmente, <b>oferecer saída</b>, senão é um beco.
  */
 function SemRegistro({
   uf, nacional, periodo,
@@ -152,9 +152,6 @@ function SemRegistro({
         Nenhuma emenda com esta cidade identificada na fonte
       </h2>
       <ExplicacaoDaAusencia nacional={nacional} />
-      <p className="mx-auto mt-3 max-w-prose text-sm text-texto-suave">
-        Nove em cada dez municípios brasileiros estão nesta mesma situação.
-      </p>
       <p className="mt-4 text-sm">
         <Link href={`/?uf=${uf}`} className="text-acento hover:underline">
           Ver candidatos de {uf}

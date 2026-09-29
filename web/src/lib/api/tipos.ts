@@ -279,6 +279,14 @@ export interface ResumoDeEmendas {
    * naquele ano, sugerindo que é só disso que dispomos.
    */
   periodo: PeriodoCoberto | null;
+  /**
+   * Quantos municípios distintos têm ao menos uma emenda registrada.
+   *
+   * Vem da API, e não escrito aqui, porque já apodreceu três vezes: "474 de
+   * 5.570" foi medido com um ano carregado e virou 1.596 quando quatro
+   * entraram — a tela dizia "nove em cada dez municípios" quando já eram sete.
+   */
+  municipiosComRegistro?: number;
 }
 
 export interface PaginaDeEmendas {

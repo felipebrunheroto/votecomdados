@@ -427,7 +427,8 @@ Emendas parlamentares de autoria da pessoa.
       { "localidade": "MULTIPLO",  "linhas": 40, "desembolso": 38100000.00 },
       { "localidade": "MUNICIPIO", "linhas": 4,  "desembolso": 3100000.00 }
     ],
-    "periodo": { "anoInicio": 2023, "anoFim": 2026 }
+    "periodo": { "anoInicio": 2023, "anoFim": 2026 },
+    "municipiosComRegistro": 1596
   },
   "pagination": { "page": 1, "pageSize": 20, "total": 44 }
 }
@@ -443,6 +444,12 @@ dinheiro foi registrado como `MULTIPLO` — várias localidades numa linha só,
 sem discriminar, e **não decomponível**: o endpoint de documentos da CGU traz
 só número de empenho. Sem este campo, uma página mostraria as emendas com
 cidade e calaria sobre o resto, parecendo completa.
+
+**`municipiosComRegistro`** conta os municípios distintos com ao menos uma
+emenda registrada. Existe porque esse número **já apodreceu três vezes**
+escrito à mão: era "474 de 5.570" com um ano carregado, e virou **1.596** com
+quatro. A tela dizia ao leitor *"nove em cada dez municípios estão nesta
+situação"* quando já eram sete.
 
 **`resumo.periodo` é da COBERTURA, não do recorte consultado.** Um
 parlamentar com emenda só em 2025 continua recebendo o intervalo inteiro: a
