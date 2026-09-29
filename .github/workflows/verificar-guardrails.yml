@@ -134,7 +134,7 @@ jobs:
             --alarm-names votecomdados-billing-50pct votecomdados-billing-80pct \
                           votecomdados-billing-100pct votecomdados-5xx-sustentado \
                           votecomdados-ingestao-falhou-2-dias \
-            --query 'MetricAlarms[].{Alarme:AlarmName,Estado:StateValue}' \
+            --query 'MetricAlarms[].{Alarme:AlarmName,Estado:StateValue,Desde:StateUpdatedTimestamp}' \
             --output table | tee estados.txt
 
           {
@@ -143,6 +143,18 @@ jobs:
             echo '```'
             cat estados.txt
             echo '```'
+            echo ""
+            echo "_\`Desde\` existe porque em 29/09/2026 este relatorio disse"
+            echo "\`ingestao-falhou-2-dias = ALARM\` e nao havia como saber, do"
+            echo "e-mail, se o problema era de agora ou residuo de dois dias"
+            echo "antes — o alarme exige erro em DOIS dias seguidos e leva"
+            echo "\`period = 86400\`, entao muda de estado com atraso de ate um"
+            echo "dia. Sem a data, \`ALARM\` velho e \`ALARM\` novo sao iguais na"
+            echo "tela, e um alarme que nao distingue os dois ensina a ignora-lo._"
+            echo ""
+            echo "_Para o que o alarme NAO responde — qual fonte, qual erro —"
+            echo "ha o workflow \`Logs da ingestão\`, e o \`/api/v1/meta/status\`"
+            echo "diz a hora da ultima execucao de cada fonte._"
           } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
 
           # INSUFFICIENT_DATA num alarme de billing quase sempre significa
@@ -333,7 +345,7 @@ jobs:
               # A FAMILIA da rota, no mesmo fluxo e com prefixo.
               #
               # O top-10 por URL nao responde a pergunta que decide o
-              # pre-render: /proposicoes/{id} sao 250 mil enderecos distintos,
+              # pre-render: /proposicoes/{id} sao 50.073 enderecos distintos,
               # e nenhum deles isoladamente cabe num top-10 dominado pela
               # home -- mesmo que a familia inteira receba trafego relevante.
               #
@@ -351,8 +363,22 @@ jobs:
 
           grep '^PAGINA ' classificadas.txt | cut -d' ' -f2- \
             | sort | uniq -c | sort -rn | head -10 > topo.txt || true
+          # Teto de 20 linhas, com o resto SOMADO numa linha propria em vez de
+          # cortado em silencio.
+          #
+          # O relatorio de 29/09/2026 trouxe 290 linhas aqui e ficou ilegivel.
+          # A causa nao era a agregacao: era o soft-404 do site inteiro, que
+          # fazia `/login`, `/admin`, `/Dockerfile` e companhia responderem
+          # 200 e entrarem numa tabela que só conta 2xx — a propria nota
+          # abaixo dizia "sondagem leva 404 e nao entra", e era falsa. A
+          # correcao real foi na borda (infra/funcoes/roteamento.js). O teto
+          # aqui é o cinto de seguranca: a tabela existe para ser lida num
+          # e-mail, e nenhuma decisao de pre-render precisa da 21a linha.
           grep '^FAMILIA ' classificadas.txt | cut -d' ' -f2- \
-            | sort | uniq -c | sort -rn > familias.txt || true
+            | sort | uniq -c | sort -rn > familias-todas.txt || true
+          head -20 familias-todas.txt > familias.txt || true
+          RESTO_LINHAS=$(($(wc -l < familias-todas.txt) - $(wc -l < familias.txt)))
+          RESTO_ACESSOS=$(tail -n +21 familias-todas.txt | awk '{s+=$1} END {print s+0}')
 
           {
             echo ""
@@ -365,10 +391,15 @@ jobs:
                 echo "| $n | \`$familia\` |"
               done < familias.txt
               echo ""
+              if [ "$RESTO_LINHAS" -gt 0 ]; then
+                echo "| $RESTO_ACESSOS | _(outras $RESTO_LINHAS famílias, somadas)_ |"
+              fi
+              echo ""
               echo "_Agregado por família de rota. É o número que decide se vale"
-              echo "pré-renderizar \`/proposicoes/*\` e \`/votacoes/*\` — 291 mil"
-              echo "páginas que respondem por quase todo o custo de S3. O top-10 por"
-              echo "URL abaixo não serve para isso: são 250 mil endereços distintos,"
+              echo "pré-renderizar \`/proposicoes/*\` e \`/votacoes/*\` — 58.276"
+              echo "páginas, que viram 291 mil dos 294 mil objetos e respondem por"
+              echo "quase todo o custo de S3. O top-10 por"
+              echo "URL abaixo não serve para isso: são 58.276 endereços distintos,"
               echo "e nenhum cabe sozinho num top-10 dominado pela home._"
             else
               echo "Sem linhas de página no período."
@@ -388,7 +419,12 @@ jobs:
               echo ""
               echo "_Assets excluídos (\`/_next/\`, fontes, ícones): uma visita"
               echo "carrega dezenas deles e afogaria a lista. Só contam"
-              echo "respostas 2xx e 304: sondagem leva 404 e não entra._"
+              echo "respostas 2xx e 304._"
+              echo ""
+              echo "_Sondagem só deixou de entrar em 29/09/2026. Até ali o site"
+              echo "respondia 200 para QUALQUER caminho inexistente, e por isso"
+              echo "\`/.env\`, \`/login\` e \`/admin\` apareciam aqui. A janela de 7"
+              echo "dias ainda arrasta esses dias por uma semana._"
             else
               echo "Arquivos encontrados, mas nenhuma linha de página — pode ser"
               echo "tráfego só de assets, ou mudança no formato do log."
