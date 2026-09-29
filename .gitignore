@@ -40,8 +40,9 @@ consulta_cand_*
 # chave em claro. Nao commitar nem alterar este arquivo.
 docs/dados-api.md
 
-# Bytecode do spike de emendas.
-tools/__pycache__/
+# Bytecode de Python, onde quer que apareca. Era so tools/ ate 29/09/2026,
+# quando importar a Lambda num teste deixou um em infra/lambda/.
+__pycache__/
 
 # Dado bruto de terceiro baixado pelo spike de emendas: nao versionar.
 tools/emendas-*.json
