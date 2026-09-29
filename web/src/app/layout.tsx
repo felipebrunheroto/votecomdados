@@ -25,21 +25,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Pular para o conteúdo
         </a>
 
+        {/*
+          Sem navegação no cabeçalho, de propósito.
+
+          As duas buscas — candidato e município — vivem na própria home, e
+          "Sobre os dados" e "Dados abertos" estão no rodapé. Repetir os
+          mesmos destinos em cima e embaixo não acrescenta caminho; só ocupa
+          a faixa mais visível da tela com o que já está a um rolar de
+          distância.
+
+          A marca continua sendo link para a home: é o caminho de volta, e
+          esse não está em nenhum outro lugar.
+        */}
         <header className="border-b border-borda">
-          <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4">
+          <div className="mx-auto max-w-4xl px-4 py-4">
             <Link href="/" className="font-semibold tracking-tight text-texto">
               VoteComDados
             </Link>
-            {/* flex e gap porque agora sao dois links: com um so, o nav nao
-                precisava de espacamento e nao tinha. */}
-            <nav aria-label="Principal" className="flex items-center gap-4">
-              <Link href="/municipios" className="text-sm text-texto-suave hover:text-texto">
-                Emendas por município
-              </Link>
-              <Link href="/sobre" className="text-sm text-texto-suave hover:text-texto">
-                Sobre os dados
-              </Link>
-            </nav>
           </div>
         </header>
 
