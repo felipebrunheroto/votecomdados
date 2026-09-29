@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,10 @@ import tools.jackson.databind.json.JsonMapper;
 class ClienteDoSenadoTest {
 
     private HttpServer servidor;
-    private final ClienteDoSenado cliente = new ClienteDoSenado(new JsonMapper(), 10);
+    // Espera de 10ms: o comportamento sob teste e QUANTAS vezes tenta, nao
+    // quanto espera. Com os 2s de producao a suite levaria 14 segundos.
+    private final ClienteDoSenado cliente = new ClienteDoSenado(new JsonMapper(), 10, 4, 10);
+    private final AtomicInteger tentativas = new AtomicInteger();
 
     @BeforeEach
     void subirServidor() throws IOException {
@@ -50,6 +54,27 @@ class ClienteDoSenadoTest {
         });
         servidor.createContext("/erro", troca -> {
             troca.sendResponseHeaders(500, -1);
+            troca.close();
+        });
+        // O caso real de 29/09/2026: a API do Senado respondeu 503 e, minutos
+        // depois, 200 em 0,4s. Uma tentativa so derrubou a ingestao do dia.
+        servidor.createContext("/instavel", troca -> {
+            if (tentativas.incrementAndGet() < 3) {
+                troca.sendResponseHeaders(503, -1);
+                troca.close();
+                return;
+            }
+            byte[] corpo = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
+            troca.getResponseHeaders().add("Content-Type", "application/json;charset=UTF-8");
+            troca.sendResponseHeaders(200, corpo.length);
+            try (var saida = troca.getResponseBody()) {
+                saida.write(corpo);
+            }
+        });
+        // 4xx nao se repete: a fonte esta dizendo que o PEDIDO esta errado.
+        servidor.createContext("/nao-existe", troca -> {
+            tentativas.incrementAndGet();
+            troca.sendResponseHeaders(404, -1);
             troca.close();
         });
         servidor.start();
@@ -96,5 +121,36 @@ class ClienteDoSenadoTest {
 
     private URI enderecoDe(String caminho) {
         return URI.create("http://127.0.0.1:" + servidor.getAddress().getPort() + caminho);
+    }
+
+    /**
+     * O caso que derrubou a ingestão de 29/09/2026.
+     *
+     * <p>A API do Senado respondeu <b>um</b> 503 e, minutos depois, 200 em
+     * 0,4s. Sem recuo, a execução inteira falhou e a fonte ficou um dia sem
+     * atualizar. O cliente da Câmara já recuava; este não herdou o cuidado.
+     */
+    @Test
+    void indisponibilidade_passageira_nao_derruba_a_execucao() {
+        var no = cliente.buscar(enderecoDe("/instavel"));
+
+        assertThat(no.get("ok").asBoolean()).isTrue();
+        assertThat(tentativas.get())
+            .as("insistiu ate a fonte voltar, em vez de desistir no primeiro 503")
+            .isEqualTo(3);
+    }
+
+    /**
+     * 4xx é a fonte dizendo que o pedido está errado. Repeti-lo só gasta
+     * tempo — e, numa ingestão de centenas de consultas, multiplica o atraso
+     * por quatro sem nenhuma chance de sucesso.
+     */
+    @Test
+    void erro_de_pedido_nao_e_repetido() {
+        assertThatThrownBy(() -> cliente.buscar(enderecoDe("/nao-existe")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("404");
+
+        assertThat(tentativas.get()).as("4xx nao se repete").isEqualTo(1);
     }
 }
