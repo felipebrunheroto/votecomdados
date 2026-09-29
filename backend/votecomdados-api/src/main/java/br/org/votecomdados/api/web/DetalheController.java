@@ -63,6 +63,24 @@ class DetalheController {
         return emendas.municipiosComEmenda();
     }
 
+    /**
+     * TODAS as cidades com emenda, cada uma com seus dados completos.
+     *
+     * <p>Existe para o build do frontend não fazer uma chamada por cidade. Com
+     * 474 cidades isso passava; com 1.596 o runner estourou o limite do WAF —
+     * 600 requisições por IP a cada 5 minutos — e passou a receber 403. O
+     * cliente traduzia o erro em {@code null}, a página chamava
+     * {@code notFound()}, e 1.596 páginas foram publicadas como "não
+     * encontrada" sem nada acusar. A plataforma bloqueou o próprio build.
+     *
+     * <p>São ~4 mil emendas no total, então o corpo inteiro é menor que o
+     * somatório das respostas individuais que ele substitui.
+     */
+    @GetMapping("/emendas/municipios/dados")
+    java.util.List<EmendasDoMunicipio> dadosDeTodosOsMunicipios() {
+        return emendas.todosOsMunicipios();
+    }
+
     @GetMapping("/emendas/municipios/{uf}/{municipio}")
     EmendasDoMunicipio emendasDoMunicipio(@PathVariable String uf,
                                           @PathVariable String municipio) {

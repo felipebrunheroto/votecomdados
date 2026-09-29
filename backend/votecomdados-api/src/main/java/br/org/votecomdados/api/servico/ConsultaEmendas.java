@@ -26,6 +26,27 @@ public class ConsultaEmendas {
 
     public record Paginacao(int page, int pageSize, int total) {}
 
+    /**
+     * Todas as cidades com emenda, com dados completos.
+     *
+     * <p>O resumo nacional é calculado UMA vez e compartilhado: consultá-lo
+     * por cidade faria 1.596 agregações idênticas sobre a tabela inteira.
+     */
+    public List<EmendasDoMunicipio> todosOsMunicipios() {
+        var nacional = repositorio.resumoNacional();
+        var porCidade = repositorio.emendasPorMunicipio();
+
+        return porCidade.entrySet().stream().map(e -> {
+            String[] chave = e.getKey().split("/", 2);
+            List<Emenda> lista = e.getValue();
+            return new EmendasDoMunicipio(chave[1], chave[0], true,
+                (int) lista.stream()
+                    .map(x -> x.politicoId() != null ? x.politicoId().toString() : x.autorNome())
+                    .distinct().count(),
+                resumir(lista), nacional, lista);
+        }).toList();
+    }
+
     /** Cidades com emenda identificada, para o pré-render do frontend. */
     public List<EmendaRepositorio.Municipio> municipiosComEmenda() {
         return repositorio.municipiosComEmenda();

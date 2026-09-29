@@ -254,6 +254,19 @@ jobs:
           conferir "/"        "VoteComDados"
           conferir "/sobre/"  "Sobre os dados"
 
+          # Uma pagina de CIDADE, com conteudo pre-renderizado.
+          #
+          # Em 29/09/2026 as 1.596 saíram como "nao encontrada": o build faz
+          # uma chamada a API por cidade, e com 1.596 o runner estourou o
+          # limite do WAF (600 req por IP a cada 5 min). O cliente traduziu o
+          # 403 em null, a pagina chamou notFound(), e a publicacao passou
+          # verde -- porque esta conferencia so olhava / e /sobre/.
+          #
+          # A cidade escolhida tem emenda em 2023 e em 2025, entao nao some
+          # por variacao de ano; se um dia sumir, esta linha falha e alguem
+          # descobre o porque, que e o ponto.
+          conferir "/municipios/SP/SANTOS/" "SANTOS"
+
           # Sondagem tem de receber 404 de verdade. 200 aqui significa que a
           # função de roteamento saiu do ar, e todo scanner volta a ser
           # informado de que cada caminho existe.
