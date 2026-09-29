@@ -649,4 +649,5 @@ class ApiIntegracaoTest {
             .as("e por isso ele carrega as formas que ficaram de fora")
             .contains("MULTIPLO");
     }
+
 }

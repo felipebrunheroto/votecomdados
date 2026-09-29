@@ -43,7 +43,7 @@ public class ConsultaEmendas {
                 (int) lista.stream()
                     .map(x -> x.politicoId() != null ? x.politicoId().toString() : x.autorNome())
                     .distinct().count(),
-                resumir(lista), nacional, lista);
+                resumir(lista, nacional), nacional, lista);
         }).toList();
     }
 
@@ -77,13 +77,15 @@ public class ConsultaEmendas {
      */
     public EmendasDoMunicipio doMunicipio(String uf, String municipio) {
         List<Emenda> emendas = repositorio.doMunicipio(uf, municipio);
+        // Uma vez, e reusado pelo resumo local e pelo campo `nacional`.
+        ResumoDeEmendas nacional = repositorio.resumoNacional();
 
         return new EmendasDoMunicipio(
             municipio, uf.toUpperCase(),
             !emendas.isEmpty(),
             emendas.isEmpty() ? 0 : repositorio.parlamentaresDoMunicipio(uf, municipio),
-            resumir(emendas),
-            repositorio.resumoNacional(),
+            resumir(emendas, nacional),
+            nacional,
             emendas);
     }
 
@@ -94,7 +96,16 @@ public class ConsultaEmendas {
      * somar aqui evita um SQL agregado que precisaria repetir a comparação
      * sem acento do nome e correria o risco de divergir dela.
      */
-    private ResumoDeEmendas resumir(List<Emenda> emendas) {
+    /**
+     * Soma sobre a lista, com o resumo nacional RECEBIDO PRONTO.
+     *
+     * <p>Antes ele era consultado aqui dentro, por cidade. Com uma requisição
+     * por vez isso era só lento; no endpoint em lote virou 1.596 agregações
+     * sobre a tabela inteira -- três por cidade, contando período e contagem
+     * de municípios -- e a API devolveu 504 ao próprio build. Otimizar a
+     * chamada de fora e deixar a de dentro não otimiza nada.
+     */
+    private ResumoDeEmendas resumir(List<Emenda> emendas, ResumoDeEmendas nacional) {
         BigDecimal empenhado = soma(emendas, Emenda::empenhado);
         BigDecimal pago = soma(emendas, Emenda::pago);
         BigDecimal resto = soma(emendas, Emenda::restoPago);
@@ -103,13 +114,12 @@ public class ConsultaEmendas {
             : List.of(new FatiaDeLocalidade(LocalidadeEmenda.MUNICIPIO,
                 emendas.size(), pago.add(resto)));
 
-        int[] p = repositorio.periodoCoberto();
         return new ResumoDeEmendas(emendas.size(), empenhado, pago, resto,
             pago.add(resto), fatias,
-            p == null ? null : new PeriodoCoberto(p[0], p[1]),
-            // Do acervo, nao deste municipio: serve para a tela dizer quantas
-            // cidades estao na mesma situacao.
-            repositorio.resumoNacional().municipiosComRegistro());
+            // Periodo e contagem de municipios vem do resumo nacional ja
+            // calculado: sao propriedades do acervo, nao deste municipio.
+            nacional.periodo(),
+            nacional.municipiosComRegistro());
     }
 
     /** Ausência conta como zero na soma, sem apagar a linha. */
