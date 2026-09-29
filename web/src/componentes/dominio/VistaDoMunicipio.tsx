@@ -57,7 +57,11 @@ function ComRegistro({ dados }: { dados: EmendasDoMunicipio }) {
           <dd className="text-3xl font-semibold tracking-tight tabular-nums">
             {formatarReais(resumo.desembolso)}
           </dd>
-          <dt className="text-sm text-texto-suave">recebidos, com origem identificada</dt>
+          <dt className="text-sm text-texto-suave">
+            {resumo.desembolso === 0 && resumo.empenhado > 0
+              ? "desembolsados — o empenhado não saiu"
+              : "recebidos, com origem identificada"}
+          </dt>
         </div>
         <div>
           <dd className="text-3xl font-semibold tracking-tight tabular-nums">
@@ -69,12 +73,37 @@ function ComRegistro({ dados }: { dados: EmendasDoMunicipio }) {
         </div>
       </dl>
 
+      {/*
+        Tres situacoes distintas, e so a primeira era tratada.
+
+        1. pago = 0 e restos > 0 -> o dinheiro CHEGOU, por orcamento antigo.
+           Santos, 2025: R$ 600 mil.
+        2. empenhado > 0 e desembolso = 0 -> foi PROMETIDO e nao saiu. Em
+           2025 eram 40 das 474 cidades e R$ 95,6 milhoes; Nova Mamore tinha
+           R$ 22,4 milhoes empenhados e zero executado. A tela dizia
+           "R$ 0 recebidos" e calava sobre isso.
+        3. nada empenhado -> a emenda existe e nao saiu do papel.
+
+        Sao fatos diferentes, e "R$ 0" sozinho servia para os tres.
+      */}
       {resumo.restoPago > 0 && resumo.pago === 0 && (
         <p className="mt-4 rounded border border-aviso-borda bg-aviso-fundo p-3 text-sm text-aviso-texto">
           <strong>O orçamento do ano registra R$ 0,00 pago para esta cidade.</strong>{" "}
           O dinheiro chegou por <strong>restos a pagar</strong> — orçamento de
           anos anteriores executado agora. Uma leitura que olhasse só a coluna
           &ldquo;pago&rdquo; diria que nada foi recebido.
+        </p>
+      )}
+
+      {resumo.desembolso === 0 && resumo.empenhado > 0 && (
+        <p className="mt-4 rounded border border-aviso-borda bg-aviso-fundo p-3 text-sm text-aviso-texto">
+          <strong>
+            {formatarReais(resumo.empenhado)} foram reservados para esta cidade
+            e nada foi desembolsado.
+          </strong>{" "}
+          Emenda empenhada é compromisso do orçamento, não dinheiro que saiu —
+          e pode ficar anos assim, ou ser cancelada. O valor acima aparece como
+          R$ 0 porque mede o que <em>chegou</em>, não o que foi prometido.
         </p>
       )}
 

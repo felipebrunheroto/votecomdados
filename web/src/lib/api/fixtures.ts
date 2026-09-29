@@ -371,16 +371,23 @@ export const EMENDAS_POR_MUNICIPIO: Record<string, EmendasDoMunicipio> = {
         empenhado: 800960, pago: 0, restoPago: 409999.98, desembolso: 409999.98 },
     ],
   },
+  // Tiete, dado real de 2026: R$ 1,3 milhao empenhado e NADA desembolsado.
+  // Terceiro estado da tela -- nem "recebeu", nem "sem dado".
   "SP/TIETE": {
-    municipio: "TIETE", uf: "SP", temRegistro: false, parlamentares: 0,
+    municipio: "TIETE", uf: "SP", temRegistro: true, parlamentares: 1,
     nacional: NACIONAL_FIXTURE,
     resumo: {
-      linhas: 0, empenhado: 0, pago: 0, restoPago: 0, desembolso: 0,
-      porLocalidade: [],
-      periodo: { anoInicio: 2025, anoFim: 2025 },
+      linhas: 1, empenhado: 1300000, pago: 0, restoPago: 0, desembolso: 0,
+      porLocalidade: [{ localidade: "MUNICIPIO", linhas: 1, desembolso: 0 }],
+      periodo: { anoInicio: 2023, anoFim: 2026 },
       municipiosComRegistro: 1596,
     },
-    emendas: [],
+    emendas: [
+      { ...EMENDA_BASE, codigo: "202640010003", autorNome: "FELIPE BECARI",
+        politicoId: null, autorOrigemNome: null,
+        municipio: "TIETE", uf: "SP", localidadeBruta: "TIETÊ - SP",
+        empenhado: 1300000, pago: 0, restoPago: 0, desembolso: 0 },
+    ],
   },
 };
 
