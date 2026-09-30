@@ -52,14 +52,62 @@ function enderecoDeFetch(): string {
   return BASE!;
 }
 
-async function buscarHttp<T>(caminho: string): Promise<T> {
-  const resposta = await fetch(`${enderecoDeFetch()}${caminho}`, {
-    headers: { Accept: "application/json" },
-  });
-  if (!resposta.ok) {
-    throw new Error(`API respondeu ${resposta.status} em ${caminho}`);
+/**
+ * Espera com jitter. O jitter não é enfeite: sem ele, várias tentativas
+ * disparadas pelo mesmo build voltam juntas e competem pela mesma janela.
+ */
+function esperar(ms: number): Promise<void> {
+  const comJitter = ms * (0.75 + Math.random() * 0.5);
+  return new Promise((resolve) => setTimeout(resolve, comJitter));
+}
+
+/** Espera entre tentativas, em ms. Cinco tentativas cobrem ~1min40. */
+const ESPERAS = [2_000, 5_000, 12_000, 30_000, 60_000];
+
+/**
+ * `tentativas > 1` só para chamadas de LISTA (poucas, no build), nunca para
+ * as de página.
+ *
+ * O build do export faz uma chamada por página — 60.598 delas — contra um
+ * WAF que permite 600 requisições por IP a cada 5 minutos. Ele não cabe, e
+ * nunca coube: medido em 30/09/2026 contra produção, políticos até a posição
+ * ~350 de 695 têm HTML real e do 360 em diante vêm com 7.919 bytes, que é a
+ * casca vazia. As 58.276 páginas de proposição e votação estão todas assim.
+ *
+ * Isso passava em silêncio porque `obterPerfil`/`obterProposicao` traduzem
+ * qualquer erro em `null`, e a página chama `notFound()`. Só apareceu quando
+ * `sitemap.ts` — que LANÇA, em vez de engolir — derrubou o build.
+ *
+ * Repetir a chamada de página não resolveria: a 2 req/s do limite, 60 mil
+ * páginas levariam 8 horas. A correção de verdade é o build pedir menos, como
+ * o endpoint em lote de municípios fez em 29/09 (PR #109) — por isso as 1.596
+ * cidades funcionam e o resto não. Enquanto essa decisão não é tomada, o
+ * retry aqui garante que as poucas chamadas de lista não derrubem a
+ * publicação: o WAF é limite de TAXA, não bloqueio, e 600 por janela seguem
+ * passando.
+ */
+async function buscarHttp<T>(caminho: string, tentativas = 1): Promise<T> {
+  let ultimoErro: Error = new Error(`API não chamada em ${caminho}`);
+
+  for (let i = 0; i < tentativas; i += 1) {
+    const resposta = await fetch(`${enderecoDeFetch()}${caminho}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (resposta.ok) return (await resposta.json()) as T;
+
+    ultimoErro = new Error(`API respondeu ${resposta.status} em ${caminho}`);
+
+    // 403 é o WAF, 429 é limite explícito, 5xx é a API se recuperando. Os
+    // três passam sozinhos; 404 e 400 não passariam nunca, e repetir só
+    // gastaria a janela que a próxima chamada útil precisa.
+    const passaSozinho =
+      resposta.status === 403 || resposta.status === 429 || resposta.status >= 500;
+    if (!passaSozinho || i === tentativas - 1) break;
+
+    await esperar(ESPERAS[Math.min(i, ESPERAS.length - 1)]);
   }
-  return (await resposta.json()) as T;
+
+  throw ultimoErro;
 }
 
 function comAtraso<T>(valor: T): Promise<T> {
@@ -68,6 +116,7 @@ function comAtraso<T>(valor: T): Promise<T> {
 
 export async function listarPoliticos(
   filtro: FiltroPoliticos = {},
+  tentativas = 1,
 ): Promise<Pagina<PoliticoResumo>> {
   const { q, cargo, uf, comAtuacao, page = 1, pageSize = 20 } = filtro;
 
@@ -79,7 +128,7 @@ export async function listarPoliticos(
     if (comAtuacao) params.set("comAtuacao", "true");
     params.set("page", String(page));
     params.set("pageSize", String(pageSize));
-    return buscarHttp<Pagina<PoliticoResumo>>(`/politicos?${params}`);
+    return buscarHttp<Pagina<PoliticoResumo>>(`/politicos?${params}`, tentativas);
   }
 
   let itens = RESUMOS;
@@ -181,7 +230,7 @@ let dadosDeMunicipios: Promise<EmendasDoMunicipio[]> | null = null;
 export function listarDadosDeMunicipios(): Promise<EmendasDoMunicipio[]> {
   if (!dadosDeMunicipios) {
     dadosDeMunicipios = BASE
-      ? buscarHttp<EmendasDoMunicipio[]>("/emendas/municipios/dados")
+      ? buscarHttp<EmendasDoMunicipio[]>("/emendas/municipios/dados", 5)
       : Promise.resolve(Object.values(EMENDAS_POR_MUNICIPIO));
   }
   return dadosDeMunicipios;
@@ -256,12 +305,31 @@ export async function listarMunicipiosComEmenda(): Promise<
   return comAtraso(MUNICIPIOS_COM_EMENDA);
 }
 
-export async function listarIdsParaPreRender(): Promise<string[]> {
+let idsParaPreRender: Promise<string[]> | undefined;
+
+/**
+ * Memoizado como `listarDadosDeMunicipios`, e pelo mesmo motivo: é chamado
+ * pelo `generateStaticParams` de `/politicos/[id]` E por `sitemap.ts`. Sem o
+ * memo são 7 chamadas a mais disputando a mesma janela de WAF que o build já
+ * estoura. O memo vale por processo — o export roda em vários workers —, mas
+ * reduzir de 14 para 7 já importa quando o orçamento é de 600 por 5 minutos.
+ */
+export function listarIdsParaPreRender(): Promise<string[]> {
+  if (!idsParaPreRender) idsParaPreRender = coletarIdsParaPreRender();
+  return idsParaPreRender;
+}
+
+async function coletarIdsParaPreRender(): Promise<string[]> {
   const TAMANHO = 100;
   const ids: string[] = [];
 
   for (let page = 1; ; page += 1) {
-    const pagina = await listarPoliticos({ comAtuacao: true, page, pageSize: TAMANHO });
+    // 5 tentativas: é chamada de lista, são 7 ao todo, e uma delas falhando
+    // derruba a publicação inteira — foi o que aconteceu em 30/09/2026.
+    const pagina = await listarPoliticos(
+      { comAtuacao: true, page, pageSize: TAMANHO },
+      5,
+    );
     ids.push(...pagina.data.map((p) => p.id));
 
     const jaLidos = page * TAMANHO;
@@ -310,7 +378,7 @@ export async function listarIdsDeProposicoes(): Promise<number[]> {
     // `GET /proposicoes` não pagina: devolve TODOS os ids, sem filtro — a
     // única finalidade dela é alimentar generateStaticParams no build
     // (achado B1). Ver docs/API.md § GET /proposicoes.
-    const r = await buscarHttp<{ ids: number[] }>("/proposicoes");
+    const r = await buscarHttp<{ ids: number[] }>("/proposicoes", 5);
     return r.ids;
   }
   return TODAS_PROPOSICOES.map((p) => p.id);
@@ -318,7 +386,7 @@ export async function listarIdsDeProposicoes(): Promise<number[]> {
 
 export async function listarIdsDeVotacoes(): Promise<number[]> {
   if (BASE) {
-    const r = await buscarHttp<{ ids: number[] }>("/votacoes");
+    const r = await buscarHttp<{ ids: number[] }>("/votacoes", 5);
     return r.ids;
   }
   return Object.keys(VOTACOES_DETALHE).map(Number);
