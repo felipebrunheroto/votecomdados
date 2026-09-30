@@ -179,15 +179,30 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ env.API_URL }}
         run: npm run build
 
+      # Antes da credencial porque não precisa de AWS, e porque um sitemap
+      # errado não deve chegar ao S3. A falha que isto pega é silenciosa:
+      # listar URL que não existe, ou omitir página que existe — nenhuma das
+      # duas quebra o build.
+      - name: o sitemap e o export concordam?
+        run: node scripts/conferir-sitemap.mjs
+
       # A credencial vem DEPOIS do build, não antes.
       #
-      # O token OIDC vale 1 hora. Gerar o export são ~79 mil páginas
-      # (46.433 proposições + 32.493 votações) e passa disso, então pedir a
-      # credencial no início do job a entregava já expirada ao `s3 sync`:
+      # O token OIDC vale 1 hora. Gerar o export são ~60 mil páginas e passa
+      # disso, então pedir a credencial no início do job a entregava já
+      # expirada ao `s3 sync`:
       # o build inteiro passava e a publicação morria em ExpiredToken,
       # arquivo por arquivo (08/09/2026).
       #
       # Nada antes daqui precisa de AWS: o build lê a API pública por HTTPS.
+      #
+      # A contagem no comentário acima dizia "~79 mil (46.433 proposições +
+      # 32.493 votações)". Medido contra a API em 29/09/2026, são 50.073
+      # proposições e 8.203 votações — 58.276 dessas, mais 695 perfis, 1.596
+      # cidades e as estáticas. As proposições cresceram; as votações não
+      # podem ter caído de 32 mil para 8 mil, então aquele número contava
+      # outra coisa (provavelmente votos, não votações). O motivo de a
+      # credencial vir depois não muda: 60 mil páginas ainda passam de 1 hora.
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
@@ -266,6 +281,26 @@ jobs:
           # por variacao de ano; se um dia sumir, esta linha falha e alguem
           # descobre o porque, que e o ponto.
           conferir "/municipios/SP/SANTOS/" "SANTOS"
+
+          # O sitemap e o robots, servidos com o content-type certo.
+          #
+          # `conferir` nao serve aqui: os dois respondiam **200 com HTML** ate
+          # 29/09/2026 (corpo do /404.html, pelo soft-404), e um grep por
+          # trecho passaria justamente nesse caso. O que separa "publicado" de
+          # "404 disfarcado" e o tipo da resposta.
+          conferir_tipo() {   # caminho, tipo esperado
+            tipo="$(curl -fsS -o /dev/null -w '%{content_type}' --max-time 30 "$SITE$1" || true)"
+            case "$tipo" in
+              *"$2"*) echo "  ok    $1 -> $tipo" ;;
+              *) echo "::error::$1 respondeu content-type \"$tipo\", esperado $2"
+                 falhou=1 ;;
+            esac
+          }
+
+          conferir_tipo "/sitemap.xml" "xml"
+          conferir_tipo "/robots.txt"  "text/plain"
+          conferir "/sitemap.xml" "/municipios/SP/SANTOS/"
+          conferir "/robots.txt"  "Sitemap: $SITE/sitemap.xml"
 
           # Sondagem tem de receber 404 de verdade. 200 aqui significa que a
           # função de roteamento saiu do ar, e todo scanner volta a ser
