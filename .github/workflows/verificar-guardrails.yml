@@ -127,6 +127,141 @@ jobs:
             } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # O alarme de billing diz "passou de 50%". Nao diz DE QUE.
+      #
+      # Em 27/09/2026 a pergunta "por que o maior custo e S3?" exigiu abrir o
+      # Cost Explorer no console e mandar print — e a resposta (quase tudo em
+      # PUT, nao em armazenamento) mudou a decisao de pre-render. Pergunta que
+      # muda decisao nao deveria custar uma visita manual ao console.
+      #
+      # UMA chamada, agrupada por SERVICE **e** USAGE_TYPE (o Cost Explorer
+      # aceita duas dimensoes). A primeira versao filtrava por
+      # SERVICE="Amazon Simple Storage Service" e devolveu "nenhum custo" em
+      # 30/09/2026, o que era implausivel — sem filtro nao ha nome de servico
+      # para errar, e a tabela por servico responde a pergunta maior ("para
+      # onde vai o dinheiro") pelo mesmo preco.
+      #
+      # CUSTA DINHEIRO: a API cobra US$ 0,01 por requisicao. Uma por dia da
+      # US$ 0,30/mes. Fica declarado na propria secao, para nao ser surpresa
+      # na fatura: monitoramento de custo que custa em silencio seria piada
+      # ruim. Se paga se evitar um unico mes de PUT desnecessario.
+      #
+      # `|| true` porque a API recusa com AccessDenied enquanto "IAM user and
+      # role access to Billing information" estiver desligado nas preferencias
+      # da conta — configuracao de conta, que o Terraform nao liga. Recusa ali
+      # nao deve derrubar o relatorio inteiro.
+      #
+      # jq e nao python de proposito: heredoc de python dentro de `run: |`
+      # indentado nao fecha, porque o terminador precisa da coluna 0.
+      - name: para onde vai o dinheiro
+        run: |
+          set -uo pipefail
+
+          # `End` do Cost Explorer e exclusivo: e o dia 1 do mes seguinte.
+          #
+          # Aritmetica explicita em vez de `date -u -d "+1 month"`: aquele -d e
+          # do date do GNU, roda no ubuntu do Actions e nao num Mac, o que
+          # tornaria este passo impossivel de testar fora do CI. E a virada de
+          # dezembro fica visivel aqui em vez de quebrar uma vez por ano.
+          ANO="$(date -u +%Y)"; MES="$(date -u +%m)"
+          INICIO="$ANO-$MES-01"
+          if [ "$MES" = "12" ]; then
+            FIM="$((ANO + 1))-01-01"
+          else
+            FIM="$ANO-$(printf '%02d' "$((10#$MES + 1))")-01"
+          fi
+
+          aws ce get-cost-and-usage \
+            --time-period "Start=$INICIO,End=$FIM" \
+            --granularity MONTHLY --metrics UnblendedCost UsageQuantity \
+            --group-by Type=DIMENSION,Key=SERVICE Type=DIMENSION,Key=USAGE_TYPE \
+            --output json > custo.json 2> custoerro.txt || true
+
+          TABELA=""
+          if [ -s custo.json ]; then
+            TABELA="$(jq -r '
+              def dinheiro:
+                (. * 100 | round) as $c
+                | if $c == 0 then "0.00" else
+                    (if $c < 0 then "-" else "" end) as $sinal
+                    | ($c | fabs) as $a
+                    | ($a / 100 | floor) as $i
+                    | ($a - $i * 100) as $f
+                    | "\($sinal)\($i).\(if $f < 10 then "0" else "" end)\($f)"
+                  end;
+
+              def milhar:
+                tostring | explode | reverse
+                | [ range(0; length) as $i | if ($i > 0 and $i % 3 == 0) then [46, .[$i]] else [.[$i]] end ]
+                | flatten | reverse | implode;
+
+              [ .ResultsByTime[].Groups[]
+                | { s: .Keys[0], u: (.Keys[1] // "-"),
+                    v: (.Metrics.UnblendedCost.Amount | tonumber),
+                    q: (.Metrics.UsageQuantity.Amount | tonumber) } ] as $tudo
+              | ($tudo | map(select(.v > 0))) as $t
+              | if ($t | length) == 0 then "VAZIO" else
+                  ($t | map(.v) | add) as $soma
+                  | ( "| US$ | % | serviço |", "|---:|---:|---|",
+                      ( $t | group_by(.s) | map({ s: .[0].s, v: (map(.v) | add) })
+                        | sort_by(-.v) | .[:10][]
+                        | "| \(.v | dinheiro) | \(.v / $soma * 1000 | round / 10)% | \(.s) |" ),
+                      "| **\($soma | dinheiro)** | | **total da conta** |" )
+                  , ( ($tudo | map(select((.s | test("Storage Service")) and .q > 0))
+                        | sort_by(-.q)) as $s3
+                      | if ($s3 | length) == 0 then empty else
+                          ( "", "Dentro do S3 — por VOLUME, nao por custo:", "",
+                            "| requisições/GB-mês | US$ | tipo de uso |", "|---:|---:|---|",
+                            ( $s3[:8][]
+                              | "| \(.q | round | milhar) | \(.v | dinheiro) | `\(.u)` |" ) )
+                        end )
+                end
+            ' custo.json 2>/dev/null)" || TABELA=""
+          fi
+
+          {
+            echo ""
+            echo "### Para onde vai o dinheiro (mes corrente)"
+            echo ""
+            if [ "$TABELA" = "VAZIO" ]; then
+              echo "Nenhum custo lancado neste mes ainda. O Cost Explorer atrasa"
+              echo "cerca de 24h, entao no dia 1 isto fica vazio por algumas horas."
+            elif [ -n "$TABELA" ]; then
+              echo "$TABELA"
+              echo ""
+              echo "_\`Requests-Tier1\` e PUT/COPY/POST/LIST; \`Requests-Tier2\` e GET._"
+              echo ""
+              echo "_Uma publicacao do site reescreve ~303 mil objetos: 60.570"
+              echo "paginas x 5 arquivos, medido no export (\`index.html\`,"
+              echo "\`index.txt\` e tres \`.txt\` de RSC por pagina). Da US\$ 1,51 de"
+              echo "PUT por deploy. O custo acompanha o NUMERO DE PUBLICACOES,"
+              echo "nao o tamanho do site nem o trafego: \`s3 sync\` compara"
+              echo "tamanho e mtime, e \`next build\` renova o mtime de tudo,"
+              echo "entao cada deploy reescreve o site inteiro._"
+              echo ""
+              echo "_A tabela do S3 e por VOLUME e nao por custo de proposito._"
+              echo "_\`UnblendedCost\` e o valor efetivamente cobrado, ja sem o que"
+              echo "o Free Tier absorveu — entao S3 com custo zero nao significa"
+              echo "\"sem uso\", significa \"dentro da franquia\". Ordenar por custo"
+              echo "fazia a linha desaparecer exatamente no caso que interessa"
+              echo "explicar. O volume e o que diz QUANDO o zero deixa de ser"
+              echo "zero; o custo so avisa depois._"
+            else
+              echo "**Cost Explorer nao respondeu.** Motivo:"
+              echo ""
+              echo '```'
+              head -3 custoerro.txt 2>/dev/null || echo "(sem detalhe)"
+              echo '```'
+              echo ""
+              echo "Se for \`AccessDenied\`, falta ligar _IAM user and role access"
+              echo "to Billing information_ em Account settings. E configuracao de"
+              echo "conta; o Terraform nao liga."
+            fi
+            echo ""
+            echo "_Esta secao consome 1 requisicao do Cost Explorer por dia, a"
+            echo "US\$ 0,01 cada._"
+          } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
+
       - name: os alarmes de custo tem dado para avaliar?
         run: |
           set -euo pipefail
@@ -380,6 +515,21 @@ jobs:
           RESTO_LINHAS=$(($(wc -l < familias-todas.txt) - $(wc -l < familias.txt)))
           RESTO_ACESSOS=$(tail -n +21 familias-todas.txt | awk '{s+=$1} END {print s+0}')
 
+          # O log do CloudFront ja chega percent-encoded, entao um caminho que
+          # JA era codificado aparece codificado DUAS vezes: TIETE saiu como
+          # `/municipios/SP/TIET%25C3%258A/` no relatorio de 30/09/2026.
+          # Ilegivel, e pior, parecia um endereco diferente do que o site
+          # serve. Duas passadas devolvem o nome: %25C3%258A -> %C3%8A -> Ê.
+          #
+          # `printf %b` nao reinterpreta a propria saida, entao a segunda
+          # passada nao transforma um `\n` que tenha vindo do caminho em
+          # quebra de linha.
+          decodificar() {
+            local uma
+            uma="$(printf '%b' "${1//%/\\x}")"
+            printf '%b' "${uma//%/\\x}"
+          }
+
           {
             echo ""
             echo "### Acessos por área do site (7 dias)"
@@ -388,7 +538,7 @@ jobs:
               echo "| acessos | área |"
               echo "|---|---|"
               while read -r n familia; do
-                echo "| $n | \`$familia\` |"
+                echo "| $n | \`$(decodificar "$familia")\` |"
               done < familias.txt
               echo ""
               if [ "$RESTO_LINHAS" -gt 0 ]; then
@@ -396,10 +546,19 @@ jobs:
               fi
               echo ""
               echo "_Agregado por família de rota. É o número que decide se vale"
-              echo "pré-renderizar \`/proposicoes/*\` e \`/votacoes/*\` — 58.276"
-              echo "páginas, que viram 291 mil dos 294 mil objetos e respondem por"
-              echo "quase todo o custo de S3. O top-10 por"
-              echo "URL abaixo não serve para isso: são 58.276 endereços distintos,"
+              echo "pré-renderizar \`/proposicoes/*\` e \`/votacoes/*\`: 58.276"
+              echo "páginas, que viram 291 mil dos 302.872 objetos reescritos a"
+              echo "cada publicação._"
+              echo ""
+              echo "_Dizia aqui que elas \"respondem por quase todo o custo de"
+              echo "S3\". Medido em 30/09/2026, o custo de S3 é **US\$ 0,00** — o"
+              echo "crédito do Free Tier absorve os 17,1 milhões de PUT do mês."
+              echo "Elas respondem por quase todo o VOLUME, que é outra coisa: o"
+              echo "volume diz quando o zero deixa de ser zero, e é por isso que"
+              echo "a decisão continua de pé sem ser urgência de caixa._"
+              echo ""
+              echo "_O top-10 por URL abaixo não serve para decidir: são 58.276"
+              echo "endereços distintos,"
               echo "e nenhum cabe sozinho num top-10 dominado pela home._"
             else
               echo "Sem linhas de página no período."
@@ -414,7 +573,7 @@ jobs:
               echo "| acessos | página |"
               echo "|---|---|"
               while read -r n caminho; do
-                echo "| $n | \`$caminho\` |"
+                echo "| $n | \`$(decodificar "$caminho")\` |"
               done < topo.txt
               echo ""
               echo "_Assets excluídos (\`/_next/\`, fontes, ícones): uma visita"
@@ -437,6 +596,22 @@ jobs:
       # run que FALHOU: e quando a assinatura sumiu, o billing esta desligado
       # ou o backup nao existe. Mandar so quando tudo vai bem seria mandar
       # exatamente quando nao precisa.
+      # O relatorio inteiro tambem no LOG do run.
+      #
+      # Cada secao faz `tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"`, o que
+      # o coloca no painel de resumo e no e-mail, mas nao no log. Isso deixava
+      # duas lacunas: `workflow_dispatch` nao manda e-mail (o gate de
+      # `enviar_email` existe justamente para nao disparar e-mail em teste),
+      # entao uma execucao manual gravava o relatorio onde nenhuma ferramenta
+      # le; e comparar duas execucoes exigia abrir dois paineis em vez de
+      # buscar no log.
+      #
+      # `if: always()` pelo mesmo motivo do e-mail: a execucao que interessa
+      # mais e a que falhou.
+      - name: o relatorio, tambem no log
+        if: always()
+        run: cat relatorio.txt 2>/dev/null || echo "(relatorio vazio)"
+
       - name: manda o relatorio por e-mail
         # Agendado sempre; manual só quando pedido. O envio precisa ser
         # exercitável sob demanda: um caminho que só roda às 06:40 e cuja

@@ -215,6 +215,45 @@ previstas.
 — e é por isso que os alarmes de billing ficam em `OK`. Quando o crédito
 acabar, vira ~US$ 67/mês, de longe a maior linha do projeto.
 
+#### Setembro fechado (medido em 30/09/2026)
+
+A tabela acima é de 25/09, com 25 dias. O mês inteiro:
+
+| item | quantidade | bruto |
+|---|---|---|
+| **Requests-Tier1** (PUT) | **17.116.012** | **US$ 85,58** |
+| Requests-Tier2 (GET) | 14.932 | US$ 0,00 |
+| TimedStorage-ByteHrs | 25 GB-Mo | US$ 0,00 |
+| **cobrado** | | **US$ 0,00** |
+
+E o resto da conta, que o recorte "só S3" escondia — **este é o dinheiro que
+realmente sai**:
+
+| US$ | serviço |
+|---:|---|
+| 10,96 | Amazon Virtual Private Cloud |
+| 7,44 | AWS WAF |
+| 5,83 | Elastic Load Balancing |
+| 0,65 | Secrets Manager |
+| 0,51 | Route 53 |
+| 0,12 | ECS + ECR |
+| **25,50** | **total de setembro** |
+
+VPC, WAF e ELB são 95% da fatura. O S3 domina o *volume* e não custa nada
+ainda; VPC e WAF custam pouco e custam **hoje**.
+
+Os 17,1 milhões vêm de 302.872 objetos por publicação (medido: `aws s3 sync`
+imprimiu 302.872 linhas de `upload:` numa publicação real) × 56,5 publicações,
+ou 1,88/dia. Eram 294.701 objetos e 1,5/dia em 25/09. O crescimento tem duas
+causas de tamanhos muito diferentes: **+8.171 objetos** por publicação com as
+1.596 cidades (+2,8%), e **mais publicações** — 28 e 29/09 tiveram 22 deploys
+entre os dois, por iteração de desenvolvimento. O ritmo, não o tamanho do
+site, é o que move este número.
+
+Desde 30/09/2026 o relatório diário traz isto sozinho (seção _Para onde vai o
+dinheiro_), e ordena o S3 por **volume**, não por custo: ordenado por custo, a
+linha some exatamente no caso que ela existe para explicar.
+
 ### De onde vêm 11 milhões de PUT
 
 Cada `aws s3 sync` do deploy do frontend escreve **294.701 objetos**:
