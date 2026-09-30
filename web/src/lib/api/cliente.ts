@@ -81,10 +81,21 @@ const ESPERAS = [2_000, 5_000, 12_000, 30_000, 60_000];
  * Repetir a chamada de página não resolveria: a 2 req/s do limite, 60 mil
  * páginas levariam 8 horas. A correção de verdade é o build pedir menos, como
  * o endpoint em lote de municípios fez em 29/09 (PR #109) — por isso as 1.596
- * cidades funcionam e o resto não. Enquanto essa decisão não é tomada, o
- * retry aqui garante que as poucas chamadas de lista não derrubem a
- * publicação: o WAF é limite de TAXA, não bloqueio, e 600 por janela seguem
- * passando.
+ * cidades funcionam e o resto não.
+ *
+ * ESTE RETRY NÃO SALVA UM BUILD QUE JÁ ESTOUROU O LIMITE, e a versão
+ * anterior deste comentário dizia que salvaria: afirmava que "o WAF é limite
+ * de taxa, não bloqueio, e 600 por janela seguem passando". Está errado.
+ * Regra rate-based do WAF não atrasa o excedente — ela BLOQUEIA todas as
+ * requisições do IP enquanto a contagem da janela estiver acima do limite. O
+ * build mantém a contagem acima do início ao fim, então não existe janela
+ * para a tentativa seguinte pegar. Medido em 30/09/2026: com 5 tentativas, a
+ * publicação falhou igual, só que ~100s mais tarde.
+ *
+ * O que sobra de útil aqui é o caso para o qual retry serve de verdade: 5xx
+ * transitório, e o 403 de uma chamada isolada que pegou a janela suja por
+ * outro motivo. As chamadas de lista acontecem no início do build, quando o
+ * orçamento ainda está limpo, e é por isso que passam.
  */
 async function buscarHttp<T>(caminho: string, tentativas = 1): Promise<T> {
   let ultimoErro: Error = new Error(`API não chamada em ${caminho}`);

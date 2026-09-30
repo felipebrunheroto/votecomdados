@@ -36,11 +36,10 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
-      # Aqui e nao so no deploy: este build roda em PR, com fixtures, e e o
-      # primeiro lugar onde um sitemap incoerente com o export aparece. Deixar
-      # a conferencia so na publicacao a transformaria em descoberta
-      # pos-merge. As fixtures incluem DIAS D'AVILA de proposito -- o nome com
-      # apostrofo e acento e o unico ponto onde a URL do sitemap pode deixar
-      # de bater com o diretorio que o export cria.
-      - name: o sitemap e o export concordam?
-        run: node scripts/conferir-sitemap.mjs
+      # O sitemap sai DEPOIS do build, do proprio `out/` -- ver o comentario
+      # no topo do script. Roda tambem aqui, e nao so no deploy, porque este
+      # build de PR (com fixtures) e o primeiro lugar onde um gerador quebrado
+      # aparece. As fixtures incluem DIAS D'AVILA de proposito: o nome com
+      # apostrofo e acento e onde o encoding por segmento pode errar.
+      - name: gera o sitemap a partir do build
+        run: node scripts/gerar-sitemap.mjs
