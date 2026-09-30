@@ -9,7 +9,7 @@
 # Ver docs/BACKEND.md § 7 (empacotamento) e
 # docs/PLANO_DEVSECOPS_IAC.md § Fase 3.
 
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3-eclipse-temurin-26 AS build
 WORKDIR /reator
 
 # pom.xml de todo o reator primeiro — inclui votecomdados-ingestion mesmo
