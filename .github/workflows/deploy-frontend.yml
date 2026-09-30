@@ -180,11 +180,17 @@ jobs:
         run: npm run build
 
       # Antes da credencial porque não precisa de AWS, e porque um sitemap
-      # errado não deve chegar ao S3. A falha que isto pega é silenciosa:
-      # listar URL que não existe, ou omitir página que existe — nenhuma das
-      # duas quebra o build.
-      - name: o sitemap e o export concordam?
-        run: node scripts/conferir-sitemap.mjs
+      # errado não deve chegar ao S3.
+      #
+      # Depois do build, e não DENTRO dele: a rota `app/sitemap.ts` precisava
+      # chamar a API e derrubou a publicação duas vezes em 30/09/2026, porque
+      # o build já estourou o WAF muito antes de chegar nela. Lendo o `out/`
+      # não há chamada nenhuma. Ver o topo do script.
+      #
+      # A saída traz quantas páginas ficaram de fora por serem casca — é a
+      # medição automática de um problema que passou meses mudo.
+      - name: gera o sitemap a partir do build
+        run: node scripts/gerar-sitemap.mjs
 
       # A credencial vem DEPOIS do build, não antes.
       #

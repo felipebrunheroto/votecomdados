@@ -368,18 +368,34 @@ types/
 
 `web/src/app/sitemap.ts`. Três decisões que não são óbvias:
 
-**Vem das mesmas funções do pré-render** (`listarIdsParaPreRender`,
-`listarDadosDeMunicipios`), não de uma consulta própria. Um sitemap tem
-exatamente uma forma de falhar sem ninguém notar — listar URL que não existe,
-ou omitir URL que existe — e nenhuma das duas quebra o build. Vindo da mesma
-fonte, não podem divergir. `web/scripts/conferir-sitemap.mjs` fecha o resto,
-comparando o XML contra os diretórios do export nos dois sentidos, no deploy,
-antes da credencial de AWS.
+**Sai DEPOIS do build, do próprio `out/`** — `web/scripts/gerar-sitemap.mjs`,
+não uma rota `app/sitemap.ts`.
+
+Era uma rota, por um dia, e derrubou a publicação duas vezes em 30/09/2026. A
+rota roda dentro do build e precisa perguntar à API quais páginas existem — e
+o build já estourou o WAF muito antes de chegar nela (ver § abaixo). Tentei
+retry; não funciona, e a razão importa: regra *rate-based* do WAF não atrasa o
+excedente, **bloqueia** todas as requisições do IP enquanto a contagem da
+janela estiver acima do limite. O build mantém a contagem acima do início ao
+fim, então não existe janela para a tentativa seguinte pegar.
+
+Depois do build não há essa disputa, porque não há chamada nenhuma. E a
+concordância entre sitemap e site deixa de ser algo a verificar: passa a ser
+construção.
+
+**Só entra quem tem `<title>` próprio.** Página existir no disco não significa
+ter conteúdo — a casca (corpo vazio, título padrão do layout) é o que o build
+escreve quando a API recusou. O número de excluídas vai para o log do deploy,
+e é a primeira medição automática desse problema.
 
 **Os ~27 mil candidatos sem pré-render ficam de fora.** Eles abrem no
 navegador pelo fallback de cliente, mas o HTML que o servidor entrega é a
 casca do 404. Oferecê-los a um buscador é pedir que indexe 27 mil páginas cujo
 conteúdo, para ele, é "não encontrada".
+
+Pelo mesmo motivo ficam de fora as páginas que o build não conseguiu montar:
+medido em 30/09/2026, ~350 dos 695 políticos têm conteúdo e as 58.276 de
+proposição e votação nenhuma. O sitemap não as esconde — ele as conta.
 
 **Sem `lastModified`.** Não sabemos quando uma página mudou — a API não expõe
 data por político nem por município. A data disponível é a da execução da
