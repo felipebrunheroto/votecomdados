@@ -182,9 +182,13 @@ jobs:
             TABELA="$(jq -r '
               def dinheiro:
                 (. * 100 | round) as $c
-                | ($c / 100 | floor) as $i
-                | ($c - $i * 100) as $f
-                | "\($i).\(if $f < 10 then "0" else "" end)\($f)";
+                | if $c == 0 then "0.00" else
+                    (if $c < 0 then "-" else "" end) as $sinal
+                    | ($c | fabs) as $a
+                    | ($a / 100 | floor) as $i
+                    | ($a - $i * 100) as $f
+                    | "\($sinal)\($i).\(if $f < 10 then "0" else "" end)\($f)"
+                  end;
 
               def milhar:
                 tostring | explode | reverse
