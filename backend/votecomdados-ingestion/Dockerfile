@@ -13,7 +13,7 @@
 # um job batch (ApplicationRunner + System.exit), não um service. Disparado
 # pelo EventBridge Scheduler via `ecs:RunTask`, sem ALB associado.
 
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3-eclipse-temurin-26 AS build
 WORKDIR /reator
 
 COPY pom.xml .
