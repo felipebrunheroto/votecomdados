@@ -134,22 +134,29 @@ jobs:
       # PUT, nao em armazenamento) mudou a decisao de pre-render. Pergunta que
       # muda decisao nao deveria custar uma visita manual ao console.
       #
-      # CUSTA DINHEIRO: a API do Cost Explorer cobra US$ 0,01 por requisicao.
-      # Uma por dia da US$ 0,30/mes. Fica declarado aqui de proposito, para
-      # nao ser surpresa na fatura: e o preco de saber para onde vai o resto,
-      # e se paga se evitar um unico mes de PUT desnecessario.
+      # UMA chamada, agrupada por SERVICE **e** USAGE_TYPE (o Cost Explorer
+      # aceita duas dimensoes). A primeira versao filtrava por
+      # SERVICE="Amazon Simple Storage Service" e devolveu "nenhum custo" em
+      # 30/09/2026, o que era implausivel — sem filtro nao ha nome de servico
+      # para errar, e a tabela por servico responde a pergunta maior ("para
+      # onde vai o dinheiro") pelo mesmo preco.
       #
-      # `|| true` porque a API recusa com AccessDenied enquanto "IAM access to
-      # Billing information" estiver desligado nas preferencias da conta —
-      # configuracao de conta, que o Terraform nao liga. Recusa ali nao deve
-      # derrubar o relatorio inteiro.
+      # CUSTA DINHEIRO: a API cobra US$ 0,01 por requisicao. Uma por dia da
+      # US$ 0,30/mes. Fica declarado na propria secao, para nao ser surpresa
+      # na fatura: monitoramento de custo que custa em silencio seria piada
+      # ruim. Se paga se evitar um unico mes de PUT desnecessario.
+      #
+      # `|| true` porque a API recusa com AccessDenied enquanto "IAM user and
+      # role access to Billing information" estiver desligado nas preferencias
+      # da conta — configuracao de conta, que o Terraform nao liga. Recusa ali
+      # nao deve derrubar o relatorio inteiro.
       #
       # jq e nao python de proposito: heredoc de python dentro de `run: |`
-      # indentado nao fecha (o terminador precisa da coluna 0), e a primeira
-      # versao disto quebrava por isso.
-      - name: onde o dinheiro do S3 esta indo
+      # indentado nao fecha, porque o terminador precisa da coluna 0.
+      - name: para onde vai o dinheiro
         run: |
           set -uo pipefail
+
           # `End` do Cost Explorer e exclusivo: e o dia 1 do mes seguinte.
           #
           # Aritmetica explicita em vez de `date -u -d "+1 month"`: aquele -d e
@@ -167,49 +174,68 @@ jobs:
           aws ce get-cost-and-usage \
             --time-period "Start=$INICIO,End=$FIM" \
             --granularity MONTHLY --metrics UnblendedCost \
-            --filter '{"Dimensions":{"Key":"SERVICE","Values":["Amazon Simple Storage Service"]}}' \
-            --group-by Type=DIMENSION,Key=USAGE_TYPE \
-            --output json > s3custo.json 2> s3erro.txt || true
+            --group-by Type=DIMENSION,Key=SERVICE Type=DIMENSION,Key=USAGE_TYPE \
+            --output json > custo.json 2> custoerro.txt || true
 
           TABELA=""
-          if [ -s s3custo.json ]; then
+          if [ -s custo.json ]; then
             TABELA="$(jq -r '
+              def dinheiro:
+                (. * 100 | round) as $c
+                | ($c / 100 | floor) as $i
+                | ($c - $i * 100) as $f
+                | "\($i).\(if $f < 10 then "0" else "" end)\($f)";
+
               [ .ResultsByTime[].Groups[]
-                | { k: .Keys[0], v: (.Metrics.UnblendedCost.Amount | tonumber) }
-                | select(.v > 0) ]
-              | sort_by(-.v)
-              | if length == 0 then "VAZIO" else
-                  (map(.v) | add) as $t
-                  | ( "| US$ | % | tipo de uso |", "|---:|---:|---|",
-                      (.[:12][] | "| \(.v * 100 | round / 100) | \(.v / $t * 1000 | round / 10)% | `\(.k)` |"),
-                      "| **\($t * 100 | round / 100)** | | **total** |" )
+                | { s: .Keys[0], u: (.Keys[1] // "-"), v: (.Metrics.UnblendedCost.Amount | tonumber) }
+                | select(.v > 0) ] as $t
+              | if ($t | length) == 0 then "VAZIO" else
+                  ($t | map(.v) | add) as $soma
+                  | ( "| US$ | % | serviço |", "|---:|---:|---|",
+                      ( $t | group_by(.s) | map({ s: .[0].s, v: (map(.v) | add) })
+                        | sort_by(-.v) | .[:10][]
+                        | "| \(.v | dinheiro) | \(.v / $soma * 1000 | round / 10)% | \(.s) |" ),
+                      "| **\($soma | dinheiro)** | | **total da conta** |" )
+                  , ( ($t | map(select(.s | test("Storage Service"))) | sort_by(-.v)) as $s3
+                      | if ($s3 | length) == 0 then empty else
+                          ( "", "Dentro do S3:", "",
+                            "| US$ | % do S3 | tipo de uso |", "|---:|---:|---|",
+                            ($s3 | map(.v) | add) as $ts3
+                            | ( $s3[:8][]
+                                | "| \(.v | dinheiro) | \(.v / $ts3 * 1000 | round / 10)% | `\(.u)` |" ) )
+                        end )
                 end
-            ' s3custo.json 2>/dev/null)" || TABELA=""
+            ' custo.json 2>/dev/null)" || TABELA=""
           fi
 
           {
             echo ""
-            echo "### Custo do S3 no mes (ate agora)"
+            echo "### Para onde vai o dinheiro (mes corrente)"
             echo ""
             if [ "$TABELA" = "VAZIO" ]; then
-              echo "Nenhum custo de S3 lancado neste mes ainda."
+              echo "Nenhum custo lancado neste mes ainda. O Cost Explorer atrasa"
+              echo "cerca de 24h, entao no dia 1 isto fica vazio por algumas horas."
             elif [ -n "$TABELA" ]; then
               echo "$TABELA"
               echo ""
               echo "_\`Requests-Tier1\` e PUT/COPY/POST/LIST; \`Requests-Tier2\` e GET._"
               echo ""
-              echo "_Uma publicacao do site reescreve ~303 mil objetos — 60.570"
+              echo "_Uma publicacao do site reescreve ~303 mil objetos: 60.570"
               echo "paginas x 5 arquivos, medido no export (\`index.html\`,"
-              echo "\`index.txt\` e tres \`.txt\` de RSC por pagina). Sao US\$ 1,51"
-              echo "de PUT por deploy. O custo acompanha o NUMERO DE"
-              echo "PUBLICACOES, nao o tamanho do site nem o trafego: \`s3 sync\`"
-              echo "compara tamanho e mtime, e \`next build\` renova o mtime de"
-              echo "tudo, entao cada deploy reescreve o site inteiro._"
+              echo "\`index.txt\` e tres \`.txt\` de RSC por pagina). Da US\$ 1,51 de"
+              echo "PUT por deploy. O custo acompanha o NUMERO DE PUBLICACOES,"
+              echo "nao o tamanho do site nem o trafego: \`s3 sync\` compara"
+              echo "tamanho e mtime, e \`next build\` renova o mtime de tudo,"
+              echo "entao cada deploy reescreve o site inteiro._"
+              echo ""
+              echo "_\`UnblendedCost\`: e o valor efetivamente cobrado, ja sem o"
+              echo "que o Free Tier absorveu. Zero num servico pode significar"
+              echo "\"dentro da franquia\", nao \"sem uso\"._"
             else
               echo "**Cost Explorer nao respondeu.** Motivo:"
               echo ""
               echo '```'
-              head -3 s3erro.txt 2>/dev/null || echo "(sem detalhe)"
+              head -3 custoerro.txt 2>/dev/null || echo "(sem detalhe)"
               echo '```'
               echo ""
               echo "Se for \`AccessDenied\`, falta ligar _IAM user and role access"
