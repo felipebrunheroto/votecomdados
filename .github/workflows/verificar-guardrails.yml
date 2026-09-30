@@ -127,6 +127,100 @@ jobs:
             } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # O alarme de billing diz "passou de 50%". Nao diz DE QUE.
+      #
+      # Em 27/09/2026 a pergunta "por que o maior custo e S3?" exigiu abrir o
+      # Cost Explorer no console e mandar print — e a resposta (quase tudo em
+      # PUT, nao em armazenamento) mudou a decisao de pre-render. Pergunta que
+      # muda decisao nao deveria custar uma visita manual ao console.
+      #
+      # CUSTA DINHEIRO: a API do Cost Explorer cobra US$ 0,01 por requisicao.
+      # Uma por dia da US$ 0,30/mes. Fica declarado aqui de proposito, para
+      # nao ser surpresa na fatura: e o preco de saber para onde vai o resto,
+      # e se paga se evitar um unico mes de PUT desnecessario.
+      #
+      # `|| true` porque a API recusa com AccessDenied enquanto "IAM access to
+      # Billing information" estiver desligado nas preferencias da conta —
+      # configuracao de conta, que o Terraform nao liga. Recusa ali nao deve
+      # derrubar o relatorio inteiro.
+      #
+      # jq e nao python de proposito: heredoc de python dentro de `run: |`
+      # indentado nao fecha (o terminador precisa da coluna 0), e a primeira
+      # versao disto quebrava por isso.
+      - name: onde o dinheiro do S3 esta indo
+        run: |
+          set -uo pipefail
+          # `End` do Cost Explorer e exclusivo: e o dia 1 do mes seguinte.
+          #
+          # Aritmetica explicita em vez de `date -u -d "+1 month"`: aquele -d e
+          # do date do GNU, roda no ubuntu do Actions e nao num Mac, o que
+          # tornaria este passo impossivel de testar fora do CI. E a virada de
+          # dezembro fica visivel aqui em vez de quebrar uma vez por ano.
+          ANO="$(date -u +%Y)"; MES="$(date -u +%m)"
+          INICIO="$ANO-$MES-01"
+          if [ "$MES" = "12" ]; then
+            FIM="$((ANO + 1))-01-01"
+          else
+            FIM="$ANO-$(printf '%02d' "$((10#$MES + 1))")-01"
+          fi
+
+          aws ce get-cost-and-usage \
+            --time-period "Start=$INICIO,End=$FIM" \
+            --granularity MONTHLY --metrics UnblendedCost \
+            --filter '{"Dimensions":{"Key":"SERVICE","Values":["Amazon Simple Storage Service"]}}' \
+            --group-by Type=DIMENSION,Key=USAGE_TYPE \
+            --output json > s3custo.json 2> s3erro.txt || true
+
+          TABELA=""
+          if [ -s s3custo.json ]; then
+            TABELA="$(jq -r '
+              [ .ResultsByTime[].Groups[]
+                | { k: .Keys[0], v: (.Metrics.UnblendedCost.Amount | tonumber) }
+                | select(.v > 0) ]
+              | sort_by(-.v)
+              | if length == 0 then "VAZIO" else
+                  (map(.v) | add) as $t
+                  | ( "| US$ | % | tipo de uso |", "|---:|---:|---|",
+                      (.[:12][] | "| \(.v * 100 | round / 100) | \(.v / $t * 1000 | round / 10)% | `\(.k)` |"),
+                      "| **\($t * 100 | round / 100)** | | **total** |" )
+                end
+            ' s3custo.json 2>/dev/null)" || TABELA=""
+          fi
+
+          {
+            echo ""
+            echo "### Custo do S3 no mes (ate agora)"
+            echo ""
+            if [ "$TABELA" = "VAZIO" ]; then
+              echo "Nenhum custo de S3 lancado neste mes ainda."
+            elif [ -n "$TABELA" ]; then
+              echo "$TABELA"
+              echo ""
+              echo "_\`Requests-Tier1\` e PUT/COPY/POST/LIST; \`Requests-Tier2\` e GET._"
+              echo ""
+              echo "_Uma publicacao do site reescreve ~303 mil objetos — 60.570"
+              echo "paginas x 5 arquivos, medido no export (\`index.html\`,"
+              echo "\`index.txt\` e tres \`.txt\` de RSC por pagina). Sao US\$ 1,51"
+              echo "de PUT por deploy. O custo acompanha o NUMERO DE"
+              echo "PUBLICACOES, nao o tamanho do site nem o trafego: \`s3 sync\`"
+              echo "compara tamanho e mtime, e \`next build\` renova o mtime de"
+              echo "tudo, entao cada deploy reescreve o site inteiro._"
+            else
+              echo "**Cost Explorer nao respondeu.** Motivo:"
+              echo ""
+              echo '```'
+              head -3 s3erro.txt 2>/dev/null || echo "(sem detalhe)"
+              echo '```'
+              echo ""
+              echo "Se for \`AccessDenied\`, falta ligar _IAM user and role access"
+              echo "to Billing information_ em Account settings. E configuracao de"
+              echo "conta; o Terraform nao liga."
+            fi
+            echo ""
+            echo "_Esta secao consome 1 requisicao do Cost Explorer por dia, a"
+            echo "US\$ 0,01 cada._"
+          } | tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"
+
       - name: os alarmes de custo tem dado para avaliar?
         run: |
           set -euo pipefail
