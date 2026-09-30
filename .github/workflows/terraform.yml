@@ -66,6 +66,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Vem ANTES da credencial de proposito: nao precisa de AWS, e custa
+      # segundos. A funcao de roteamento decide na borda o que o site inteiro
+      # serve; desde 29/09/2026 ela devolve 404 real para caminho que nao casa
+      # com nenhuma rota publicada, e o modo de falha disso e caro e
+      # silencioso -- rota nova em `web/src/app` sem entrada em `ROTAS` vira
+      # 404 para todo mundo, com o build verde, porque o Next gerou o HTML.
+      #
+      # So no job de `plan`: e o que barra o PR. Repetir no `apply` atrasaria
+      # a descoberta para depois do merge, que e tarde.
+      - name: a borda ainda serve todas as rotas do site?
+        run: node funcoes/roteamento.test.mjs
+
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}

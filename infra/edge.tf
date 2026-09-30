@@ -209,6 +209,19 @@ resource "aws_cloudfront_distribution" "frontend" {
   # do S3 (objeto não existe) → CloudFront reescreve para 200 servindo
   # `/404.html` → o app reconhece `/politicos/{uuid}/` e busca o perfil no
   # navegador. Sem isso, a maioria dos ~28 mil candidatos fica inacessível.
+  #
+  # Verificado em 29/09/2026 num navegador real, não por curl: AARON SALLES
+  # TORRES (sem atuação legislativa, logo sem pré-render) renderiza pelo
+  # fallback. É a razão de este `response_code` NÃO poder virar 404.
+  #
+  # O que mudou em 29/09/2026 foi QUEM chega aqui. Esta regra não sabe
+  # distinguir "forma de rota válida sem objeto" de "URI que o site nunca
+  # publicou", então até essa data `/login`, `/naoexiste/` e `/sitemap.xml`
+  # também respondiam 200 com o corpo do 404 — para um scanner, 200 quer
+  # dizer "existe". A distinção passou a ser feita antes, na função de
+  # roteamento (`funcoes/roteamento.js`, lista `ROTAS`), que é o único ponto
+  # com informação para isso: 404 de verdade para o que não casa com rota
+  # nenhuma, e queda até aqui só para as formas publicadas.
   custom_error_response {
     error_code         = 403
     response_code      = 200

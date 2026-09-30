@@ -396,19 +396,34 @@ aws s3 cp --recursive s3://votecomdados-acesso-<conta>/ ./log/ \
 gunzip -c ./log/**/*.gz | awk '{print $3}' | sort | uniq -c | sort -rn | head -20
 ```
 
-**Cuidado ao filtrar por `sc-status`.** Desde 25/09/2026 há dois
+**Cuidado ao filtrar por `sc-status`.** Desde 29/09/2026 há três
 comportamentos distintos, e confundi-los leva a conclusão errada:
 
-- **Sondagem** (`/.env`, `/.git/*`, `.php`, `wp-*`) recebe **404 de verdade**,
-  devolvido pela função de borda `infra/funcoes/roteamento.js`. Filtrar por
-  2xx exclui essas linhas corretamente.
-- **Endereço digitado errado e perfil não pré-renderizado** continuam em
-  **200**: o CloudFront reescreve 403/404 para 200 servindo `/404.html`, que é
-  o que faz o fallback dos ~28 mil perfis funcionar (`custom_error_response`
-  em `infra/edge.tf`). Perfil montado no navegador e URL errada registram o
-  mesmo 200.
+- **Sondagem** (`/.env`, `/.git/*`, `.php`, `wp-*`, `.zip`, `.lock`, `.pub`…)
+  recebe **404 de verdade em texto puro**, devolvido pela função de borda
+  `infra/funcoes/roteamento.js`. Filtrar por 2xx exclui essas linhas.
+- **Endereço que não casa com nenhuma rota publicada** (`/login`, `/admin`,
+  `/naoexiste/`, `/municipios/`) recebe **404 de verdade com uma página
+  mínima**, da mesma função. Até 29/09/2026 esses respondiam **200**, e é por
+  isso que `/login`, `/admin` e `/dashboard` apareciam na tabela "Acessos por
+  área do site" do relatório diário — uma tabela que só conta 2xx e que, por
+  causa disso, afirmava em nota algo falso sobre sondagem não entrar.
+- **Forma de rota conhecida sem objeto no S3** — perfil não pré-renderizado,
+  proposição fora do build — continua em **200**: o CloudFront reescreve
+  403/404 para 200 servindo `/404.html`, que é o que faz o fallback dos ~27
+  mil perfis funcionar (`custom_error_response` em `infra/edge.tf`).
+  Verificado em 29/09/2026 num navegador real: AARON SALLES TORRES, sem
+  pré-render, renderiza pelo fallback.
 
-Quem separa esses dois últimos é `x-edge-result-type`, que traz `Error`.
+  Aqui perfil montado no navegador e URL de forma válida mas inexistente
+  (`/politicos/<uuid que não existe>/`) registram o mesmo 200 — e quem os
+  separa é `x-edge-result-type`, que traz `Error`.
+
+A distinção entre o segundo e o terceiro é a razão de a lista `ROTAS` existir
+na função de borda: o 200 é necessário para as *formas* que o site publica, e
+era aplicado a qualquer URI. **Rota nova em `web/src/app` exige entrada em
+`ROTAS`**, senão vira 404 para todo mundo com o build verde —
+`infra/funcoes/roteamento.test.mjs` roda no CI de infra para impedir isso.
 
 ### Se um dia precisar de mais que isso
 

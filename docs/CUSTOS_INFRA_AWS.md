@@ -263,6 +263,19 @@ roteamento corrigido e o top-10 do relatório filtrando só páginas servidas
 (2xx/304), o relatório de **~02/10/2026** é a primeira medição honesta de se
 alguém chega nessas páginas.
 
+### As contagens, medidas em 29/09/2026
+
+Contado contra a API, não estimado: `GET /proposicoes` devolve **50.073** ids e
+`GET /votacoes` **8.203** — **58.276 páginas**, todas com id numérico. O número
+que aparece como "291 mil" é de **objetos** no S3, e é ele que a cobrança de
+PUT conta. Os dois se conciliam por divisão, não por medição independente:
+291.000 / 58.276 ≈ 5 objetos por página, o que bate com o que o export do App
+Router emite (`index.html`, `index.txt` e os payloads RSC por segmento).
+
+Página e objeto foram usados como sinônimos em versões anteriores desta seção e
+do relatório diário — "291 mil páginas". Não são, e a diferença é de 5x numa
+conta que decide um corte estrutural.
+
 ### O critério, corrigido em 28/09/2026
 
 O critério original era "se `/proposicoes/` não aparecer no top-10". **Estava
@@ -287,7 +300,7 @@ que decide:
   ou só as da legislatura corrente com tramitação recente.
 
 A **medição** é automática e diária; a **decisão** não, de propósito. Cortar
-291 mil páginas é estrutural e dificilmente se desfaz sem um build inteiro;
+58.276 páginas é estrutural e dificilmente se desfaz sem um build inteiro;
 automatizá-la a partir de um limiar seria deixar uma escolha de produto na
 mão de uma regra que não sabe por que existe.
 
