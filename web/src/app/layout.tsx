@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Rodape } from "@/componentes/dominio/Rodape";
+import { SITE } from "@/lib/site";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  // Sem isto o Next resolve URL de Open Graph e canônica como caminho
+  // relativo, que nenhum agregador aceita. Passou a existir junto com o
+  // sitemap (29/09/2026), pelo mesmo motivo: os dois precisam de absoluta.
+  metadataBase: new URL(SITE),
   title: {
     default: "VoteComDados — atuação dos candidatos de 2026",
     template: "%s · VoteComDados",
