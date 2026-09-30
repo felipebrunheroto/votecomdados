@@ -358,8 +358,39 @@ types/
   candidato) — perfis de político precisam ser indexáveis, é o principal
   caso de uso de busca orgânica da plataforma.
 - `sitemap.xml` gerado em build time a partir da mesma lista de IDs usada
-  no `generateStaticParams`.
-- `robots.txt` liberando todas as rotas públicas.
+  no `generateStaticParams`. **Implementado em 29/09/2026** — a especificação
+  acima existia desde o início e nunca havia sido construída: até essa data
+  `/sitemap.xml` respondia **200 com HTML** (o corpo do `/404.html`), e o
+  relatório diário mostrava 8 pedidos de buscador por semana recebendo isso.
+- `robots.txt` liberando todas as rotas públicas. Mesma história, mesma data.
+
+### O que o sitemap lista, e o que não lista
+
+`web/src/app/sitemap.ts`. Três decisões que não são óbvias:
+
+**Vem das mesmas funções do pré-render** (`listarIdsParaPreRender`,
+`listarDadosDeMunicipios`), não de uma consulta própria. Um sitemap tem
+exatamente uma forma de falhar sem ninguém notar — listar URL que não existe,
+ou omitir URL que existe — e nenhuma das duas quebra o build. Vindo da mesma
+fonte, não podem divergir. `web/scripts/conferir-sitemap.mjs` fecha o resto,
+comparando o XML contra os diretórios do export nos dois sentidos, no deploy,
+antes da credencial de AWS.
+
+**Os ~27 mil candidatos sem pré-render ficam de fora.** Eles abrem no
+navegador pelo fallback de cliente, mas o HTML que o servidor entrega é a
+casca do 404. Oferecê-los a um buscador é pedir que indexe 27 mil páginas cujo
+conteúdo, para ele, é "não encontrada".
+
+**Sem `lastModified`.** Não sabemos quando uma página mudou — a API não expõe
+data por político nem por município. A data disponível é a da execução da
+ingestão, e usá-la afirmaria que as 2.294 páginas mudaram sempre que qualquer
+fonte rodou, ou seja, todo dia. Um `lastmod` que o buscador descobre ser falso
+é pior que ausente: ele passa a ignorar o campo.
+
+`/proposicoes/*` e `/votacoes/*` também estão de fora, mas por outro motivo:
+são 58.276 páginas cujo pré-render está em decisão (ver
+`CUSTOS_INFRA_AWS.md`), passariam o limite de 50.000 URLs por arquivo, e
+anunciá-las convidaria rastreamento de páginas que podem deixar de existir.
 - URLs canônicas estáveis (`/politicos/{uuid}`); considerar slug
   amigável (`/politicos/{uuid}-{nome-urna-slugificado}`) para
   legibilidade, mantendo o UUID como parte não ambígua da URL.

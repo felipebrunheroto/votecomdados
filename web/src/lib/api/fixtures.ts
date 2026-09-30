@@ -371,6 +371,31 @@ export const EMENDAS_POR_MUNICIPIO: Record<string, EmendasDoMunicipio> = {
         empenhado: 800960, pago: 0, restoPago: 409999.98, desembolso: 409999.98 },
     ],
   },
+  // Nome com APOSTROFO e acento. Nao e enfeite: sete das 1.596 cidades com
+  // dado tem apostrofo (DIAS D'AVILA, MIRASSOL D'OESTE, OLHO D'AGUA DO
+  // CASADO...), e o endereco servido e percent-encoded. O que isto exercita
+  // no build e a concordancia entre a URL que `sitemap.ts` emite e o
+  // diretorio que o export cria -- a unica falha que um sitemap pode ter sem
+  // ninguem notar. Conferido contra producao em 29/09/2026:
+  // /municipios/BA/DIAS%20D'%C3%81VILA/ serve a pagina real.
+  "BA/DIAS D'ÁVILA": {
+    municipio: "DIAS D'ÁVILA", uf: "BA", temRegistro: true, parlamentares: 1,
+    nacional: NACIONAL_FIXTURE,
+    resumo: {
+      linhas: 1, empenhado: 250000, pago: 250000, restoPago: 0,
+      desembolso: 250000,
+      porLocalidade: [{ localidade: "MUNICIPIO", linhas: 1, desembolso: 250000 }],
+      periodo: { anoInicio: 2025, anoFim: 2025 },
+      municipiosComRegistro: 1596,
+    },
+    emendas: [
+      { ...EMENDA_BASE, codigo: "202540010009", autorNome: "JOAO CURY NETO",
+        politicoId: null, autorOrigemNome: null,
+        municipio: "DIAS D'ÁVILA", uf: "BA",
+        localidadeBruta: "DIAS D'ÁVILA - BA",
+        empenhado: 250000, pago: 250000, restoPago: 0, desembolso: 250000 },
+    ],
+  },
   // Tiete, dado real de 2026: R$ 1,3 milhao empenhado e NADA desembolsado.
   // Terceiro estado da tela -- nem "recebeu", nem "sem dado".
   "SP/TIETE": {

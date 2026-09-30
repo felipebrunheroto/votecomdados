@@ -66,8 +66,11 @@
 // conhecidas (ele pode ser asset legitimo, e a borda nao sabe quais
 // existem), entao so chega a 404 real quem casar aqui.
 //
-// `/sitemap.xml` continua de fora, e de proposito: 8 pedidos na semana sao de
-// buscador, e a resposta certa ali e PUBLICAR um sitemap, nao negar.
+// `/sitemap.xml` e `/robots.txt` ficam de fora porque agora EXISTEM: o site
+// passou a publicar os dois em 29/09/2026 (`web/src/app/sitemap.ts` e
+// `robots.ts`). Antes respondiam 200 com HTML, e a resposta certa ali nunca
+// foi negar -- era publicar. Como tem extensao, chegam ao S3 e encontram o
+// objeto.
 var SONDA = /(^|\/)\.|\.(php|phtml|asp|aspx|jsp|cgi|pl|sh|sql|bak|old|swp|save|ini|conf|config|cfg|ya?ml|log|properties|lock|dump|zip|tar|gz|tgz|rar|7z|ovpn|pem|key|crt|p12|pfx|pub)$|(^|\/)wp-/i;
 
 // Exceção: /.well-known/ é caminho legítimo e padronizado (security.txt,
