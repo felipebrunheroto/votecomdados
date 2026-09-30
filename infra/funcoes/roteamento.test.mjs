@@ -63,6 +63,15 @@ reescreve("/municipios/SP/SANTOS", "/municipios/SP/SANTOS/index.html");
 // Nome de municipio percent-encoded: TIETE com circunflexo. Uma classe de
 // caractere ingenua ([A-Z]+) reprovaria 1.596 cidades pelas acentuadas.
 reescreve("/municipios/SP/TIET%C3%8A/", "/municipios/SP/TIET%C3%8A/index.html");
+// Apostrofo: sete das 1.596 cidades com dado tem (DIAS D'AVILA, PAU D'ARCO,
+// MIRASSOL D'OESTE...). `[^\/]+` na lista de ROTAS e agnostico a encoding, e
+// e por isso que esta e a forma escrita -- CloudFront pode entregar a uri
+// decodificada, e espaco e apostrofo tambem nao sao barra.
+reescreve(
+  "/municipios/BA/DIAS%20D'%C3%81VILA/",
+  "/municipios/BA/DIAS%20D'%C3%81VILA/index.html",
+);
+reescreve("/municipios/BA/DIAS D'\u00c1VILA/", "/municipios/BA/DIAS D'\u00c1VILA/index.html");
 reescreve(
   "/politicos/80aafc3a-4d0f-41c0-b5bd-ae451504a0c9/",
   "/politicos/80aafc3a-4d0f-41c0-b5bd-ae451504a0c9/index.html",
@@ -91,6 +100,10 @@ passaDireto("/404.html");
 passaDireto("/icon.svg");
 passaDireto("/sobre/index.txt"); // payload RSC da navegacao de cliente
 passaDireto("/.well-known/security.txt"); // comeca com ponto e NAO e sonda
+// Publicados desde 29/09/2026 (web/src/app/sitemap.ts e robots.ts). Antes
+// desta data respondiam 200 com HTML; negá-los aqui os manteria inuteis.
+passaDireto("/sitemap.xml");
+passaDireto("/robots.txt");
 
 // ---- caminho desconhecido: 404 de verdade ----------------------------------
 // Todos estes respondiam 200 em producao em 29/09/2026.
