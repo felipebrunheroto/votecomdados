@@ -531,6 +531,22 @@ jobs:
       # run que FALHOU: e quando a assinatura sumiu, o billing esta desligado
       # ou o backup nao existe. Mandar so quando tudo vai bem seria mandar
       # exatamente quando nao precisa.
+      # O relatorio inteiro tambem no LOG do run.
+      #
+      # Cada secao faz `tee -a relatorio.txt >> "$GITHUB_STEP_SUMMARY"`, o que
+      # o coloca no painel de resumo e no e-mail, mas nao no log. Isso deixava
+      # duas lacunas: `workflow_dispatch` nao manda e-mail (o gate de
+      # `enviar_email` existe justamente para nao disparar e-mail em teste),
+      # entao uma execucao manual gravava o relatorio onde nenhuma ferramenta
+      # le; e comparar duas execucoes exigia abrir dois paineis em vez de
+      # buscar no log.
+      #
+      # `if: always()` pelo mesmo motivo do e-mail: a execucao que interessa
+      # mais e a que falhou.
+      - name: o relatorio, tambem no log
+        if: always()
+        run: cat relatorio.txt 2>/dev/null || echo "(relatorio vazio)"
+
       - name: manda o relatorio por e-mail
         # Agendado sempre; manual só quando pedido. O envio precisa ser
         # exercitável sob demanda: um caminho que só roda às 06:40 e cuja
