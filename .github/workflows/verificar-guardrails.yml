@@ -173,7 +173,7 @@ jobs:
 
           aws ce get-cost-and-usage \
             --time-period "Start=$INICIO,End=$FIM" \
-            --granularity MONTHLY --metrics UnblendedCost \
+            --granularity MONTHLY --metrics UnblendedCost UsageQuantity \
             --group-by Type=DIMENSION,Key=SERVICE Type=DIMENSION,Key=USAGE_TYPE \
             --output json > custo.json 2> custoerro.txt || true
 
@@ -186,9 +186,16 @@ jobs:
                 | ($c - $i * 100) as $f
                 | "\($i).\(if $f < 10 then "0" else "" end)\($f)";
 
+              def milhar:
+                tostring | explode | reverse
+                | [ range(0; length) as $i | if ($i > 0 and $i % 3 == 0) then [46, .[$i]] else [.[$i]] end ]
+                | flatten | reverse | implode;
+
               [ .ResultsByTime[].Groups[]
-                | { s: .Keys[0], u: (.Keys[1] // "-"), v: (.Metrics.UnblendedCost.Amount | tonumber) }
-                | select(.v > 0) ] as $t
+                | { s: .Keys[0], u: (.Keys[1] // "-"),
+                    v: (.Metrics.UnblendedCost.Amount | tonumber),
+                    q: (.Metrics.UsageQuantity.Amount | tonumber) } ] as $tudo
+              | ($tudo | map(select(.v > 0))) as $t
               | if ($t | length) == 0 then "VAZIO" else
                   ($t | map(.v) | add) as $soma
                   | ( "| US$ | % | serviço |", "|---:|---:|---|",
@@ -196,13 +203,13 @@ jobs:
                         | sort_by(-.v) | .[:10][]
                         | "| \(.v | dinheiro) | \(.v / $soma * 1000 | round / 10)% | \(.s) |" ),
                       "| **\($soma | dinheiro)** | | **total da conta** |" )
-                  , ( ($t | map(select(.s | test("Storage Service"))) | sort_by(-.v)) as $s3
+                  , ( ($tudo | map(select((.s | test("Storage Service")) and .q > 0))
+                        | sort_by(-.q)) as $s3
                       | if ($s3 | length) == 0 then empty else
-                          ( "", "Dentro do S3:", "",
-                            "| US$ | % do S3 | tipo de uso |", "|---:|---:|---|",
-                            ($s3 | map(.v) | add) as $ts3
-                            | ( $s3[:8][]
-                                | "| \(.v | dinheiro) | \(.v / $ts3 * 1000 | round / 10)% | `\(.u)` |" ) )
+                          ( "", "Dentro do S3 — por VOLUME, nao por custo:", "",
+                            "| requisições/GB-mês | US$ | tipo de uso |", "|---:|---:|---|",
+                            ( $s3[:8][]
+                              | "| \(.q | round | milhar) | \(.v | dinheiro) | `\(.u)` |" ) )
                         end )
                 end
             ' custo.json 2>/dev/null)" || TABELA=""
@@ -228,9 +235,13 @@ jobs:
               echo "tamanho e mtime, e \`next build\` renova o mtime de tudo,"
               echo "entao cada deploy reescreve o site inteiro._"
               echo ""
-              echo "_\`UnblendedCost\`: e o valor efetivamente cobrado, ja sem o"
-              echo "que o Free Tier absorveu. Zero num servico pode significar"
-              echo "\"dentro da franquia\", nao \"sem uso\"._"
+              echo "_A tabela do S3 e por VOLUME e nao por custo de proposito._"
+              echo "_\`UnblendedCost\` e o valor efetivamente cobrado, ja sem o que"
+              echo "o Free Tier absorveu — entao S3 com custo zero nao significa"
+              echo "\"sem uso\", significa \"dentro da franquia\". Ordenar por custo"
+              echo "fazia a linha desaparecer exatamente no caso que interessa"
+              echo "explicar. O volume e o que diz QUANDO o zero deixa de ser"
+              echo "zero; o custo so avisa depois._"
             else
               echo "**Cost Explorer nao respondeu.** Motivo:"
               echo ""
