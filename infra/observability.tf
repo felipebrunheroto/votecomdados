@@ -159,7 +159,9 @@ resource "aws_cloudwatch_metric_alarm" "cinco_xx_sustentado" {
 # antes de abrir a execucao"), e o alarme dispara só se houver erro em 2
 # janelas diárias seguidas — não confunde "uma falha isolada" (que
 # ARQUITETURA.md § 9 diz se recuperar sozinha) com "dois dias seguidos"
-# (que não). Prioridade de follow-up real: publicar a métrica de negócio
+# (que não). Esta última frase descrevia a INTENÇÃO e só passou a ser
+# verdade em 30/09/2026: ver `default_value` no filtro abaixo, e o que o
+# alarme de fato significava antes disso. Prioridade de follow-up real: publicar a métrica de negócio
 # de verdade (e, já que for mexer nisso, decidir se vale a pena também
 # corrigir o log para JSON de verdade) e trocar este filtro por ela.
 
@@ -173,6 +175,35 @@ resource "aws_cloudwatch_log_metric_filter" "ingestao_erro" {
     namespace = "VoteComDados"
     value     = "1"
     unit      = "Count"
+
+    # A linha que faz o alarme significar o que o nome dele diz.
+    #
+    # Sem ela, o filtro só publica ponto QUANDO casa. Dia sem erro não vira
+    # zero: vira ausência de dado. Medido em 30/09/2026, dez dias de métrica
+    # tinham dois pontos ao todo:
+    #
+    #     2026-09-26T13:13  Soma = 2.0
+    #     2026-09-28T13:13  Soma = 1.0
+    #
+    # O CloudWatch, para avaliar, busca pontos REAIS para trás até preencher
+    # a janela. Achou esses dois, viu "2 de 2 acima do limite" e alarmou —
+    # e eles nem são de dias consecutivos. `treat_missing_data` não salvava:
+    # ele só age quando a busca para trás não acha pontos suficientes.
+    #
+    # Na prática o alarme significava "os dois últimos erros, quando quer que
+    # tenham sido, foram erros" — verdade permanente depois do segundo erro
+    # da vida do projeto. E não saía do estado, porque dia bom não gerava
+    # ponto para contradizê-lo. Ficou em ALARM de 29/09 07:49 em diante com
+    # UM erro em 72h (conferido no log: 28/09 e 30/09 com zero).
+    #
+    # Com `default_value = 0`, todo evento que NÃO casa publica zero. A
+    # métrica fica densa, Sum do dia passa a ser a contagem de erros, e as
+    # duas janelas diárias precisam de erro DE VERDADE para alarmar. Dia sem
+    # erro nenhum agora contradiz o alarme, e ele sai sozinho.
+    #
+    # Dia sem NENHUMA linha de log continua sem ponto, e é isso que se quer:
+    # "sem execução no dia" segue caindo em `treat_missing_data`.
+    default_value = "0"
   }
 }
 
@@ -187,7 +218,10 @@ resource "aws_cloudwatch_metric_alarm" "ingestao_falhou_dois_dias" {
   statistic           = "Sum"
   threshold           = 0
 
-  treat_missing_data = "notBreaching" # sem execução no dia = sem erro, não é falha
+  # Só vale para o dia em que a ingestão não rodou (nenhuma linha de log,
+  # logo nenhum ponto). Dia em que ela rodou e não errou agora publica zero
+  # — ver `default_value` no filtro acima, e por que isso não era assim.
+  treat_missing_data = "notBreaching"
   alarm_actions      = [aws_sns_topic.alarmes.arn]
   ok_actions         = [aws_sns_topic.alarmes.arn]
 }
