@@ -36,19 +36,45 @@ if (urls.length === 0) {
   process.exit(1);
 }
 
+const ORIGEM = new URL(SITE).origin;
+
 // O caminho no XML e percent-encoded; no disco, nao. DIAS D'ÁVILA chega como
 // DIAS%20D'%C3%81VILA e tem de virar o diretorio com espaco e acento.
+//
+// Compara ORIGEM, nao prefixo de string. `url.startsWith(SITE)` tambem
+// aceitaria https://votecomdados.com.br.outrodominio.com/ -- e o CodeQL
+// aponta isso (js/incomplete-url-substring-sanitization). Aqui o insumo e o
+// XML do nosso proprio build, entao nao havia caminho de exploracao; o motivo
+// de trocar e que a versao com `new URL` afirma o que eu queria afirmar, e a
+// com `slice` dependia de o prefixo ter exatamente o comprimento suposto.
 const paraCaminho = (url) => {
-  if (!url.startsWith(SITE)) throw new Error(`URL nao absoluta em ${SITE}: ${url}`);
-  return decodeURIComponent(url.slice(SITE.length));
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`<loc> nao e URL valida: ${url}`);
+  }
+  if (parsed.origin !== ORIGEM) {
+    throw new Error(`<loc> fora de ${ORIGEM}: ${url}`);
+  }
+  return decodeURIComponent(parsed.pathname);
 };
 
 const problemas = [];
 
 // 1. Toda URL do sitemap tem arquivo?
+//
+// URL malformada entra como problema, nao como excecao: quem le a saida disto
+// no CI quer a lista de problemas, nao um stack trace do node.
 const listadas = new Set();
 for (const url of urls) {
-  const caminho = paraCaminho(url);
+  let caminho;
+  try {
+    caminho = paraCaminho(url);
+  } catch (e) {
+    problemas.push(e.message);
+    continue;
+  }
   listadas.add(caminho);
   const arquivo = caminho === "/"
     ? join(SAIDA, "index.html")
