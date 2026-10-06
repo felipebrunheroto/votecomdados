@@ -215,6 +215,43 @@ previstas.
 — e é por isso que os alarmes de billing ficam em `OK`. Quando o crédito
 acabar, vira ~US$ 67/mês, de longe a maior linha do projeto.
 
+#### O Free Tier acabou em 30/09/2026
+
+A previsão desta seção — _"quando o crédito acabar, vira ~US$ 67/mês"_ — se
+cumpriu, e na data exata. Cost Explorer por dia:
+
+| dia | total da conta |
+|---|---:|
+| 29/09 | US$ 1,01 |
+| 30/09 | US$ 0,91 |
+| **01/10** | **US$ 9,02** |
+| 02/10 | US$ 4,57 |
+
+Não foi rampa, foi degrau. **S3, ECS (o Fargate da API) e RDS apareceram do
+zero no dia 1º** — os três estavam integralmente absorvidos, e o RDS nunca
+tinha figurado na fatura. VPC, WAF, ELB e Route 53 seguem iguais, porque esses
+já eram cobrados.
+
+Projeção com o ritmo de 02–05/10:
+
+| US$/mês | serviço |
+|---:|---|
+| ~82 | S3 (PUT) |
+| ~37 | ECS Fargate |
+| ~28 | RDS |
+| ~17 | ELB |
+| ~15 | VPC |
+| ~9 | WAF |
+| ~24 | Tax |
+| **~215** | **total**, contra US$ 25,50 em setembro |
+
+**A decisão de pré-render recuperou o argumento financeiro.** A ~1,75
+publicações/dia, as 58.276 páginas custam **~US$ 79/mês** em PUT: 302.872
+objetos por publicação contra ~11.492 sem elas. Em 30/09 eu havia registrado
+que a decisão "deixou de ser sobre dinheiro"; voltou a ser 24 horas depois, e
+o motivo de eu não ter previsto é que tratei "custo zero hoje" como estado e
+não como contagem regressiva — sendo que a própria seção dizia a data.
+
 #### Setembro fechado (medido em 30/09/2026)
 
 A tabela acima é de 25/09, com 25 dias. O mês inteiro:
