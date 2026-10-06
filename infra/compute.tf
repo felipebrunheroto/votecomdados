@@ -128,8 +128,10 @@ resource "aws_ecs_service" "api" {
   name            = "votecomdados-api"
   cluster         = aws_ecs_cluster.principal.id
   task_definition = aws_ecs_task_definition.api.arn
-  desired_count   = 2 # CUSTOS_INFRA_AWS.md — 2 tasks
-  launch_type     = "FARGATE"
+  # 2 tasks em operação normal (CUSTOS_INFRA_AWS.md); 0 na fase 0 do
+  # desligamento, que é de onde vêm US$ 37/mês e 2 dos 4 IPv4 públicos.
+  desired_count = var.desligado ? 0 : 2
+  launch_type   = "FARGATE"
 
   network_configuration {
     subnets          = aws_subnet.publica[*].id

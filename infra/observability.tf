@@ -120,7 +120,13 @@ resource "aws_cloudwatch_metric_alarm" "billing_100" {
 # --- 5xx sustentado na borda (ALB) ---
 
 resource "aws_cloudwatch_metric_alarm" "cinco_xx_sustentado" {
-  alarm_name          = "votecomdados-5xx-sustentado"
+  alarm_name = "votecomdados-5xx-sustentado"
+  # Fase 0 do desligamento: para de NOTIFICAR, continua medindo. Com a API
+  # fora, este alarme dispara corretamente — e aviso certo na hora errada é
+  # ruído, que é o que ensina a ignorar e-mail de alarme. Os de BILLING ficam
+  # ligados de propósito: são eles que confirmam a fatura caindo.
+  actions_enabled = !var.desligado
+
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 3
   datapoints_to_alarm = 3 # sustentado: 3 janelas seguidas, não um pico isolado
@@ -208,7 +214,13 @@ resource "aws_cloudwatch_log_metric_filter" "ingestao_erro" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "ingestao_falhou_dois_dias" {
-  alarm_name          = "votecomdados-ingestao-falhou-2-dias"
+  alarm_name = "votecomdados-ingestao-falhou-2-dias"
+  # Fase 0 do desligamento: para de NOTIFICAR, continua medindo. Com a API
+  # fora, este alarme dispara corretamente — e aviso certo na hora errada é
+  # ruído, que é o que ensina a ignorar e-mail de alarme. Os de BILLING ficam
+  # ligados de propósito: são eles que confirmam a fatura caindo.
+  actions_enabled = !var.desligado
+
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   datapoints_to_alarm = 2

@@ -12,8 +12,21 @@ name: Deploy frontend
 # que falhe é corrigida pela seguinte, sem intervenção.
 
 on:
-  schedule:
-    - cron: "17 * * * *" # de hora em hora; 17 para não competir com o pico do topo da hora
+  # DESLIGADO em 06/10/2026, fase 0 do desligamento do projeto.
+  #
+  # Era de hora em hora. Com `var.desligado = true` a ingestão para, o
+  # watermark deixa de mudar e este workflow não publicaria — mas o job
+  # `decidir` busca `/meta/status` com `curl -fsS` sob `set -euo pipefail`, e
+  # com o ECS em zero a API não responde: daria 24 execuções vermelhas por dia,
+  # de graça e sem informação nenhuma.
+  #
+  # Cada publicação custa US$ 1,51 de PUT. Este cron era o maior item da conta.
+  #
+  # `verificar-guardrails` continua agendado DE PROPÓSITO: é ele que mede a
+  # fatura caindo, e sem ele o desligamento não tem como ser conferido.
+  #
+  # schedule:
+  #   - cron: "17 * * * *"
   push:
     branches: [main]
     paths: ["web/**"]
