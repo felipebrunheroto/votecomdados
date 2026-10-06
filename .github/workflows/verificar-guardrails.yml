@@ -173,7 +173,7 @@ jobs:
 
           aws ce get-cost-and-usage \
             --time-period "Start=$INICIO,End=$FIM" \
-            --granularity MONTHLY --metrics UnblendedCost UsageQuantity \
+            --granularity DAILY --metrics UnblendedCost UsageQuantity \
             --group-by Type=DIMENSION,Key=SERVICE Type=DIMENSION,Key=USAGE_TYPE \
             --output json > custo.json 2> custoerro.txt || true
 
@@ -195,26 +195,35 @@ jobs:
                 | [ range(0; length) as $i | if ($i > 0 and $i % 3 == 0) then [46, .[$i]] else [.[$i]] end ]
                 | flatten | reverse | implode;
 
-              [ .ResultsByTime[].Groups[]
+              ( [ .ResultsByTime[]
+                  | { d: .TimePeriod.Start,
+                      v: ([.Groups[].Metrics.UnblendedCost.Amount | tonumber] | add // 0) } ]
+                | .[-8:] ) as $dias
+              | [ .ResultsByTime[].Groups[]
                 | { s: .Keys[0], u: (.Keys[1] // "-"),
                     v: (.Metrics.UnblendedCost.Amount | tonumber),
-                    q: (.Metrics.UsageQuantity.Amount | tonumber) } ] as $tudo
+                    q: (.Metrics.UsageQuantity.Amount | tonumber) } ] as $bruto
+              | ( $bruto | group_by(.s) | map({ s: .[0].s, v: (map(.v) | add) }) ) as $porServico
+              | ( $bruto | map(select(.s | test("Storage Service")))
+                  | group_by(.u) | map({ u: .[0].u, v: (map(.v) | add), q: (map(.q) | add) }) ) as $s3dias
+              | $bruto as $tudo
               | ($tudo | map(select(.v > 0))) as $t
               | if ($t | length) == 0 then "VAZIO" else
                   ($t | map(.v) | add) as $soma
                   | ( "| US$ | % | serviço |", "|---:|---:|---|",
-                      ( $t | group_by(.s) | map({ s: .[0].s, v: (map(.v) | add) })
-                        | sort_by(-.v) | .[:10][]
+                      ( $porServico | map(select(.v > 0)) | sort_by(-.v) | .[:10][]
                         | "| \(.v | dinheiro) | \(.v / $soma * 1000 | round / 10)% | \(.s) |" ),
                       "| **\($soma | dinheiro)** | | **total da conta** |" )
-                  , ( ($tudo | map(select((.s | test("Storage Service")) and .q > 0))
-                        | sort_by(-.q)) as $s3
+                  , ( ($s3dias | map(select(.q > 0)) | sort_by(-.q)) as $s3
                       | if ($s3 | length) == 0 then empty else
                           ( "", "Dentro do S3 — por VOLUME, nao por custo:", "",
                             "| requisições/GB-mês | US$ | tipo de uso |", "|---:|---:|---|",
                             ( $s3[:8][]
                               | "| \(.q | round | milhar) | \(.v | dinheiro) | `\(.u)` |" ) )
                         end )
+                  , ( "", "Por dia, os últimos 8:", "",
+                      "| dia | US$ |", "|---|---:|",
+                      ( $dias[] | "| \(.d) | \(.v | dinheiro) |" ) )
                 end
             ' custo.json 2>/dev/null)" || TABELA=""
           fi
@@ -239,13 +248,19 @@ jobs:
               echo "tamanho e mtime, e \`next build\` renova o mtime de tudo,"
               echo "entao cada deploy reescreve o site inteiro._"
               echo ""
-              echo "_A tabela do S3 e por VOLUME e nao por custo de proposito._"
-              echo "_\`UnblendedCost\` e o valor efetivamente cobrado, ja sem o que"
-              echo "o Free Tier absorveu — entao S3 com custo zero nao significa"
-              echo "\"sem uso\", significa \"dentro da franquia\". Ordenar por custo"
-              echo "fazia a linha desaparecer exatamente no caso que interessa"
-              echo "explicar. O volume e o que diz QUANDO o zero deixa de ser"
-              echo "zero; o custo so avisa depois._"
+              echo "_A tabela do S3 e por VOLUME e nao por custo de proposito, e a"
+              echo "razao acabou de se provar: ate 30/09/2026 o S3 custava **US\$"
+              echo "0,00** porque o Free Tier de 12 meses da conta absorvia tudo,"
+              echo "e ordenar por custo fazia a linha sumir da tabela. **O Free"
+              echo "Tier acabou em 30/09.** A serie diaria acima mostra o degrau:"
+              echo "US\$ 0,91 no dia 30/09, US\$ 9,02 no dia 1º — S3, ECS (Fargate"
+              echo "da API) e RDS apareceram do zero no mesmo dia._"
+              echo ""
+              echo "_O volume dizia QUANDO o zero deixaria de ser zero. Agora diz"
+              echo "quanto se paga: ~1,75 publicacoes por dia x 302.872 objetos ="
+              echo "~16 milhoes de PUT/mes, ~US\$ 82. Sem o pre-render de"
+              echo "/proposicoes e /votacoes seriam ~11.500 objetos por publicacao,"
+              echo "ou ~US\$ 3 — diferenca de **~US\$ 79/mes**, medida em 06/10/2026._"
             else
               echo "**Cost Explorer nao respondeu.** Motivo:"
               echo ""
@@ -550,12 +565,16 @@ jobs:
               echo "páginas, que viram 291 mil dos 302.872 objetos reescritos a"
               echo "cada publicação._"
               echo ""
-              echo "_Dizia aqui que elas \"respondem por quase todo o custo de"
-              echo "S3\". Medido em 30/09/2026, o custo de S3 é **US\$ 0,00** — o"
-              echo "crédito do Free Tier absorve os 17,1 milhões de PUT do mês."
-              echo "Elas respondem por quase todo o VOLUME, que é outra coisa: o"
-              echo "volume diz quando o zero deixa de ser zero, e é por isso que"
-              echo "a decisão continua de pé sem ser urgência de caixa._"
+              echo "_Em 30/09/2026 esta nota dizia que o custo de S3 era **US\$"
+              echo "0,00**, absorvido pelo Free Tier, e que a decisão de cortar"
+              echo "não era urgência de caixa. **As duas coisas deixaram de valer"
+              echo "em 01/10**, quando o Free Tier de 12 meses da conta acabou._"
+              echo ""
+              echo "_Hoje essas 58.276 páginas custam **~US\$ 79/mês** em PUT, e"
+              echo "esse é o terceiro argumento para cortá-las — somado aos dois"
+              echo "que já existiam: elas servem casca vazia, e são elas que"
+              echo "estouram o limite do WAF e derrubam ~444 perfis de político"
+              echo "junto a cada publicação._"
               echo ""
               echo "_O top-10 por URL abaixo não serve para decidir: são 58.276"
               echo "endereços distintos,"
