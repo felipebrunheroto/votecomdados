@@ -1,0 +1,161 @@
+name: Destruir a infraestrutura
+
+# O `destroy` do nivel B do desligamento (06/10/2026).
+#
+# POR QUE UM WORKFLOW, e nao `terraform destroy` no laptop: o perfil local e o
+# `votecomdados-bootstrap`, reduzido no passo 7 de PRIMEIRA_APLICACAO.md para
+# alcancar so o bucket de state e ler o provider OIDC. Um destroy local
+# morreria de AccessDenied no meio -- depois de apagar parte -- e deixaria o
+# state inconsistente, que e exatamente o que a fase 3 existe para evitar.
+#
+# A alternativa era reampliar PowerUserAccess no usuario de bootstrap, como
+# root. Isso daria permissao ampla a uma ACCESS KEY DE LONGA DURACAO, que e o
+# que aquele passo 7 removeu de proposito. A role OIDC ja tem PowerUserAccess,
+# e so existe durante o job.
+#
+# Vale tambem a D4: mudanca de infraestrutura sai pelo CI, atras do ambiente
+# `production`. Destruir e mudanca de infraestrutura.
+#
+# ANTES DE RODAR, tire da state os tres recursos da role que este job usa para
+# autenticar -- senao o destroy apaga a propria credencial no meio:
+#
+#     terraform state rm aws_iam_role_policy.github_actions_iam_escopado
+#     terraform state rm aws_iam_role_policy_attachment.github_actions_poweruser
+#     terraform state rm aws_iam_role.github_actions_deploy
+#
+# Isso roda LOCAL, com o perfil de bootstrap: `state rm` so mexe no arquivo de
+# state no S3, nao chama a API dos recursos. A role fica orfa e sai a mao
+# depois, junto com o bucket de state.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacao:
+        description: "Digite exatamente: destruir votecomdados"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-destroy
+  cancel-in-progress: false
+
+jobs:
+  # Sem gate de ambiente: serve para a confirmacao reprovar rapido e para o
+  # aprovador LER o que vai sair antes de aprovar o job seguinte. Aprovar sem
+  # ter visto o plano seria aprovar no escuro.
+  plano_de_destruicao:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - name: a confirmacao casa?
+        working-directory: .
+        run: |
+          if [ "${{ inputs.confirmacao }}" != "destruir votecomdados" ]; then
+            echo "::error::confirmacao nao casa. Digite exatamente: destruir votecomdados"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.12.2"
+
+      - name: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=us-east-1" \
+            -backend-config="key=votecomdados/terraform.tfstate" \
+            -backend-config="use_lockfile=true"
+
+      # A role do CI ainda esta na state? Entao o `state rm` nao foi feito, e o
+      # destroy apagaria a propria credencial no meio. Barra aqui.
+      - name: a role do CI saiu da state?
+        run: |
+          if terraform state list | grep -qE '^aws_iam_role(_policy|_policy_attachment)?\.github_actions'; then
+            echo "::error::a role do CI ainda esta na state. Rode os tres \`terraform state rm\` do cabecalho deste arquivo antes de continuar."
+            terraform state list | grep -E 'github_actions' | sed 's/^/  ainda na state: /'
+            exit 1
+          fi
+          echo "ok — a role do CI nao esta na state"
+
+      - name: terraform plan -destroy
+        run: |
+          terraform plan -destroy -no-color -input=false \
+            -var="dominio=${{ vars.DOMINIO }}" \
+            -var="billing_alert_email=${{ secrets.BILLING_ALERT_EMAIL }}" \
+            -var="cpf_hmac_pepper=${{ secrets.CPF_HMAC_PEPPER }}" \
+            -var="portal_transparencia_chave=${{ secrets.PORTAL_TRANSPARENCIA_CHAVE }}" \
+            | tee plano.txt
+
+          {
+            echo "## O que o destroy vai apagar"
+            echo ""
+            echo '```'
+            grep -E "^  # |^Plan:" plano.txt || echo "(sem mudancas)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  destruir:
+    needs: plano_de_destruicao
+    runs-on: ubuntu-latest
+    environment: production # D4 — aprovacao manual obrigatoria
+    timeout-minutes: 120 # o bucket do frontend tem ~3,7 milhoes de versoes
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.12.2"
+
+      - name: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=us-east-1" \
+            -backend-config="key=votecomdados/terraform.tfstate" \
+            -backend-config="use_lockfile=true"
+
+      - name: terraform destroy
+        run: |
+          terraform destroy -auto-approve -input=false \
+            -var="dominio=${{ vars.DOMINIO }}" \
+            -var="billing_alert_email=${{ secrets.BILLING_ALERT_EMAIL }}" \
+            -var="cpf_hmac_pepper=${{ secrets.CPF_HMAC_PEPPER }}" \
+            -var="portal_transparencia_chave=${{ secrets.PORTAL_TRANSPARENCIA_CHAVE }}"
+
+      # O que sobra de proposito, para nao parecer esquecimento:
+      - name: o que ficou
+        if: always()
+        run: |
+          {
+            echo "## O que NAO foi destruido, de proposito"
+            echo ""
+            echo "- \`votecomdados-final\` — o snapshot final do RDS. Rede de seguranca"
+            echo "  enquanto o \`pg_dump\` nao estiver em segunda copia. Apagar e passo do nivel C."
+            echo "- \`votecomdados-terraform-state-<conta>\` — criado a mao na Fase 4, fora do"
+            echo "  Terraform. Sai por ultimo, a mao: e ele que registra o que ainda existe."
+            echo "- \`aws_iam_role.github_actions_deploy\` e o provider OIDC — tirados da state"
+            echo "  para o destroy nao apagar a propria credencial. Saem a mao."
+            echo "- O dominio em registro.br — anual, pago fora da AWS, expira sozinho."
+          } >> "$GITHUB_STEP_SUMMARY"
