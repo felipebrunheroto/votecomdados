@@ -4,7 +4,22 @@
 # CloudFront acessa, via Origin Access Control.
 
 resource "aws_s3_bucket" "frontend" {
-  bucket = "votecomdados-frontend-${data.aws_caller_identity.atual.account_id}"
+  # Fase 3 do desligamento (nivel B): deixa o `destroy` esvaziar o bucket.
+  #
+  # Sem isto o `terraform destroy` falha em "BucketNotEmpty" e deixa estado
+  # parcialmente aplicado -- o modo de falha que esta fase inteira existe para
+  # evitar. No frontend o problema e de escala: ele e o unico VERSIONADO, o
+  # ciclo de vida guarda versoes nao-correntes por 7 dias, e a ~1,75
+  # publicacoes/dia x 302.872 objetos sao da ordem de 3,7 MILHOES de versoes.
+  # `aws s3 rm --recursive` nao resolve isso: em bucket versionado ele apenas
+  # cria marcadores de exclusao.
+  #
+  # `force_destroy` e perigoso de deixar ligado num bucket vivo -- qualquer
+  # `destroy` ou substituicao de recurso apaga o conteudo sem perguntar. Entra
+  # aqui porque a decisao de destruir ja foi tomada e esta registrada; nao deve
+  # sobreviver a um eventual recomeco do projeto.
+  force_destroy = true
+  bucket        = "votecomdados-frontend-${data.aws_caller_identity.atual.account_id}"
 }
 
 data "aws_caller_identity" "atual" {}

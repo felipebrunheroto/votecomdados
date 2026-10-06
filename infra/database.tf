@@ -47,7 +47,18 @@ resource "aws_db_instance" "principal" {
   backup_window           = "06:00-06:30" # cedo, fora do horário provável de tráfego BR
   maintenance_window      = "sun:07:00-sun:07:30"
 
-  deletion_protection       = true
+  # Fase 3 do desligamento: a protecao sai para o `destroy` poder rodar.
+  #
+  # Com ela ligada o destroy falha NO MEIO -- depois de ja ter apagado outros
+  # recursos -- e deixa o state inconsistente, que e o pior resultado possivel
+  # aqui. Por isso vira `false` num apply ANTES do destroy, e nao no mesmo.
+  #
+  # O `skip_final_snapshot = false` abaixo continua como estava, de proposito:
+  # a destruicao deixa o snapshot `votecomdados-final` para tras. Ele e a rede
+  # de seguranca enquanto o `pg_dump` de 06/10/2026 (217 MB, restore conferido
+  # tabela por tabela contra a origem) nao estiver em segunda copia fora deste
+  # laptop. Apagar o snapshot e passo separado, do nivel C.
+  deletion_protection       = false
   skip_final_snapshot       = false
   final_snapshot_identifier = "votecomdados-final"
 
