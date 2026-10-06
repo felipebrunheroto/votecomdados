@@ -62,6 +62,9 @@ resource "aws_iam_role_policy" "scheduler_ingestao" {
 resource "aws_scheduler_schedule" "coorte_diaria" {
   name       = "votecomdados-coorte-diaria"
   group_name = "default"
+  # Fase 0 do desligamento — ver `var.desligado`.
+  state = var.desligado ? "DISABLED" : "ENABLED"
+
 
   schedule_expression = "cron(0 5 * * ? *)" # 05:00 UTC = 02:00 BRT
 
@@ -165,6 +168,9 @@ resource "aws_scheduler_schedule" "ingestao_diaria" {
   name       = "votecomdados-ingestao-diaria-${each.key}"
   group_name = "default"
 
+  # Fase 0 do desligamento — ver `var.desligado`.
+  state = var.desligado ? "DISABLED" : "ENABLED"
+
   schedule_expression = each.value.cron
 
   flexible_time_window {
@@ -232,6 +238,9 @@ resource "aws_iam_role_policy" "scheduler_snapshot" {
 resource "aws_scheduler_schedule" "snapshot_mensal" {
   name       = "votecomdados-snapshot-mensal"
   group_name = "default"
+  # Fase 0 do desligamento — ver `var.desligado`.
+  state = var.desligado ? "DISABLED" : "ENABLED"
+
 
   schedule_expression = "cron(0 7 1 * ? *)" # dia 1 de cada mês, 07:00 UTC
 

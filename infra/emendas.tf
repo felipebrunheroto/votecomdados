@@ -176,6 +176,9 @@ resource "aws_scheduler_schedule" "buscar_emendas_diaria" {
   provider   = aws.sao_paulo
   name       = "votecomdados-buscar-emendas-diaria"
   group_name = "default"
+  # Fase 0 do desligamento — ver `var.desligado`.
+  state = var.desligado ? "DISABLED" : "ENABLED"
+
 
   schedule_expression          = "cron(30 5 * * ? *)" # 05:30 UTC = 02:30 BRT
   schedule_expression_timezone = "UTC"
