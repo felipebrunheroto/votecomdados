@@ -142,11 +142,11 @@ locals {
     # E DENTRO da janela 05:00-07:00, nao em horario proprio. O deploy do
     # frontend reconstroi quando o watermark de /meta/status muda, e cada
     # publicacao escreve 294.701 objetos. Uma fonte que conclui em hora
-    # isolada dispara mais uma reconstrucao por dia: +US$ 44/mes, contra
-    # US$ 1,26 das paginas da funcionalidade inteira. Ver CUSTOS_INFRA_AWS.md.
+    # isolada dispara mais uma reconstrucao por dia -- que custa ~35x as
+    # paginas da funcionalidade inteira. Ver CUSTOS_INFRA_AWS.md.
     #
     # Emenda nao e dado de minuto -- algumas horas de atraso nao mudam nada
-    # para quem le, e valem os US$ 44.
+    # para quem le, e evita a reconstrucao extra inteira.
     emendas = {
       cron    = "cron(45 6 * * ? *)" # 06:45 UTC = 03:45 BRT
       comando = ["--job=INCREMENTAL", "--fonte=PORTAL_TRANSPARENCIA"]

@@ -55,8 +55,8 @@ O plano original dizia isso. Na prática não funciona:
 
 - A métrica de billing só atualiza a cada ~6 horas — o laço de verificação
   seria de um dia.
-- Cruzar 50% do teto de US$170 exigiria gastar **US$85 de verdade**, num
-  projeto cujo orçamento inteiro é de ~US$236.
+- Cruzar 50% do teto exigiria gastar **metade do teto de verdade**, numa
+  fração relevante do orçamento inteiro do projeto.
 
 O que precisa ser provado é o **caminho da notificação**, e ele é idêntico
 com gasto real ou com estado forçado. Por isso o teste usa

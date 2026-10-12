@@ -50,9 +50,6 @@ mantido como referência de comparação, não como alternativa em aberto.
   dias são o período inteiro.
 - **Tráfego do período:** cenário "pequeno / lançamento soft" — dezenas de
   milhares de visitas ao longo dos 45 dias, sem pico de mídia grande.
-- **Valores em USD**, cotação de referência R$ 5,50 apenas para dar ordem
-  de grandeza — a fatura real da AWS varia com câmbio do dia e com o modo
-  de faturamento da conta (ver nota de impostos ao final).
 - Preços são **estimativas de planejamento**, não cotação formal — validar
   no [AWS Pricing Calculator](https://calculator.aws) antes de comprometer
   orçamento.
@@ -75,25 +72,22 @@ o prazo, porque não são cobrados por tempo de uso:
   existe "domínio por 45 dias". O valor abaixo é o ano inteiro, pago de uma
   vez, independente de o site ficar no ar 45 dias ou 365.
 
-| Item | Configuração | USD (45 dias) |
-|---|---|---:|
-| ECS Fargate — API | 2 tasks, 0,5 vCPU / 1 GB cada, 24/7 | 55 |
-| ECS Fargate — Worker de ingestão histórica | 0,5 vCPU / 1 GB, ~25h, único, antes do go-live | 2 |
-| ECS Fargate — Worker de ingestão incremental | 0,5 vCPU / 1 GB, ~30h no período (cron diário) | 2 |
-| RDS PostgreSQL | `db.t4g.small`, single-AZ, 30 GB gp3 (só a coorte de 2026) | 49 |
-| Application Load Balancer | 1 ALB + LCUs | 29 |
-| AWS WAF | 1 web ACL + rate-based rule (proteção da API pública) | 13 |
-| Backup RDS | 7 dias de PITR + snapshot mensal retido | 2 |
-| S3 (fotos + arquivo dos CSVs anuais) | ~12 GB | 3 |
-| CloudFront (CDN) | tráfego real (~75-150 GB no período) — preço por borda/tier, não pela região de origem | 12 |
-| Route 53 | hosted zone + queries — preço global, não varia por região | 2 |
-| Secrets Manager | 3 secrets — preço global, não varia por região | 2 |
-| CloudWatch (logs + métricas) | inclui métricas de negócio (quarentena, cobertura) | 8 |
-| EventBridge Scheduler | cron de ingestão — preço global, não varia por região | 2 |
-| Domínio (.org.br/.com.br) | registro anual — único, não reduz com o prazo de 45 dias, independe de região | 24 |
-| **Subtotal** | | **≈ 205** |
-| Margem de contingência (15%) | retries de ingestão, variação de tráfego | 31 |
-| **Total (45 dias)** | | **≈ US$ 236 (~R$ 1.298)** |
+| Item | Configuração |
+|---|---|
+| ECS Fargate — API | 2 tasks, 0,5 vCPU / 1 GB cada, 24/7 |
+| ECS Fargate — Worker de ingestão histórica | 0,5 vCPU / 1 GB, ~25h, único, antes do go-live |
+| ECS Fargate — Worker de ingestão incremental | 0,5 vCPU / 1 GB, ~30h no período (cron diário) |
+| RDS PostgreSQL | `db.t4g.small`, single-AZ, 30 GB gp3 (só a coorte de 2026) |
+| Application Load Balancer | 1 ALB + LCUs |
+| AWS WAF | 1 web ACL + rate-based rule (proteção da API pública) |
+| Backup RDS | 7 dias de PITR + snapshot mensal retido |
+| S3 (fotos + arquivo dos CSVs anuais) | ~12 GB |
+| CloudFront (CDN) | tráfego real (~75-150 GB no período) — preço por borda/tier, não pela região de origem |
+| Route 53 | hosted zone + queries — preço global, não varia por região |
+| Secrets Manager | 3 secrets — preço global, não varia por região |
+| CloudWatch (logs + métricas) | inclui métricas de negócio (quarentena, cobertura) |
+| EventBridge Scheduler | cron de ingestão — preço global, não varia por região |
+| Domínio (.org.br/.com.br) | registro anual — único, não reduz com o prazo de 45 dias, independe de região |
 
 ---
 
@@ -136,20 +130,20 @@ o prazo, porque não são cobrados por tempo de uso:
   de contingência acima, não exige recursos adicionais fixos.
 - **O WAF é linha nova, exigida pela revisão de arquitetura.** A API é
   pública e anônima, e seu endpoint mais caro de servir (busca trigram) é o
-  mais barato de atacar. Rate limiting por IP na borda custa o equivalente a
-  ~US$ 8-9/mês e é o que impede que um único cliente esgote os créditos de
-  CPU do banco burstable. Não é opcional, nem para um período curto.
+  mais barato de atacar. Rate limiting por IP na borda é barato e é o que
+  impede que um único cliente esgote os créditos de CPU do banco burstable.
+  Não é opcional, nem para um período curto.
 - **O Redis foi removido, e é a maior economia do plano.** Com o cache HTTP
   de borda como camada primária ele já era candidato a corte; a definição de
   ~1.000 visitas/dia resolveu a dúvida antes da medição: espalhado por
   milhares de páginas, esse tráfego o deixaria tão frio quanto a borda, e um
-  cache frio é só custo. Sai o equivalente a ~US$ 19/mês, um SPOF e uma
-  dependência de runtime — mais do que o suficiente para pagar o WAF e a
+  cache frio é só custo. Sai a linha mais cara depois do compute, um SPOF e
+  uma dependência de runtime — mais do que o suficiente para pagar o WAF e a
   retenção de backup, que eram as duas mitigações que o orçamento original
   não comportava.
 - **Backup é linha nova, decorrente da escolha por single-AZ.** Retenção de 7
   dias de PITR (incluída no RDS até o tamanho do banco) mais um snapshot
-  mensal retido, a ~US$ 0,095/GB-mês: pouca coisa no tamanho previsto. O
+  mensal retido: pouca coisa no tamanho previsto. O
   custo real do backup aqui não é dinheiro, é o **teste de restore**, que
   consome tempo de operação — e sem ele não há backup, há esperança. Vale a
   pena rodar esse teste pelo menos uma vez dentro dos 45 dias, não só
@@ -203,51 +197,37 @@ previstas.
 
 ### S3 é a maior linha, e quase toda de requisição
 
-| item | quantidade | custo |
+| item | quantidade | participação no custo |
 |---|---|---|
-| **Requests-Tier1** (PUT/COPY/POST/LIST) | **11.132.364** | **US$ 55,66** |
-| Requests-Tier2 (GET) | 9.937 | US$ 0,00 |
-| TimedStorage-ByteHrs | 19,212 GB-Mo | US$ 0,44 |
-| *AWS Free Tier* | *crédito* | *(US$ 56,10)* |
-| **líquido** | | **US$ 0,00** |
+| **Requests-Tier1** (PUT/COPY/POST/LIST) | **11.132.364** | **99,2%** |
+| Requests-Tier2 (GET) | 9.937 | — |
+| TimedStorage-ByteHrs | 19,212 GB-Mo | 0,8% |
+
+O crédito do Free Tier absorvia o total, então o valor líquido era zero.
 
 **99,2% do custo do S3 é PUT, não armazenamento.** Hoje o crédito cobre tudo
 — e é por isso que os alarmes de billing ficam em `OK`. Quando o crédito
-acabar, vira ~US$ 67/mês, de longe a maior linha do projeto.
+acabar, o S3 passa a ser de longe a maior linha do projeto.
 
 #### O Free Tier acabou em 30/09/2026
 
-A previsão desta seção — _"quando o crédito acabar, vira ~US$ 67/mês"_ — se
-cumpriu, e na data exata. Cost Explorer por dia:
-
-| dia | total da conta |
-|---|---:|
-| 29/09 | US$ 1,01 |
-| 30/09 | US$ 0,91 |
-| **01/10** | **US$ 9,02** |
-| 02/10 | US$ 4,57 |
-
-Não foi rampa, foi degrau. **S3, ECS (o Fargate da API) e RDS apareceram do
+A previsão desta seção — de que o S3 viraria a maior linha quando o crédito
+acabasse — se cumpriu, e na data exata. O Cost Explorer por dia mostra que
+**não foi rampa, foi degrau**: o total diário saltou cerca de dez vezes entre
+30/09 e 01/10. **S3, ECS (o Fargate da API) e RDS apareceram do
 zero no dia 1º** — os três estavam integralmente absorvidos, e o RDS nunca
 tinha figurado na fatura. VPC, WAF, ELB e Route 53 seguem iguais, porque esses
 já eram cobrados.
 
-Projeção com o ritmo de 02–05/10:
-
-| US$/mês | serviço |
-|---:|---|
-| ~82 | S3 (PUT) |
-| ~37 | ECS Fargate |
-| ~28 | RDS |
-| ~17 | ELB |
-| ~15 | VPC |
-| ~9 | WAF |
-| ~24 | Tax |
-| **~215** | **total**, contra US$ 25,50 em setembro |
+Projeção com o ritmo de 02–05/10, por ordem de peso: **S3 (PUT)** é a maior
+linha, seguido de **ECS Fargate**, **RDS**, **ELB**, **VPC** e **WAF**. O
+total mensal projetado ficou cerca de **oito vezes** o de setembro.
 
 **A decisão de pré-render recuperou o argumento financeiro.** A ~1,75
-publicações/dia, as 58.276 páginas custam **~US$ 79/mês** em PUT: 302.872
-objetos por publicação contra ~11.492 sem elas. Em 30/09 eu havia registrado
+publicações/dia, as 58.276 páginas respondem por quase todo o PUT: 302.872
+objetos por publicação contra ~11.492 sem elas — **26 vezes menos**.
+
+Em 30/09 eu havia registrado
 que a decisão "deixou de ser sobre dinheiro"; voltou a ser 24 horas depois, e
 o motivo de eu não ter previsto é que tratei "custo zero hoje" como estado e
 não como contagem regressiva — sendo que a própria seção dizia a data.
@@ -256,25 +236,15 @@ não como contagem regressiva — sendo que a própria seção dizia a data.
 
 A tabela acima é de 25/09, com 25 dias. O mês inteiro:
 
-| item | quantidade | bruto |
+| item | quantidade | cobrado |
 |---|---|---|
-| **Requests-Tier1** (PUT) | **17.116.012** | **US$ 85,58** |
-| Requests-Tier2 (GET) | 14.932 | US$ 0,00 |
-| TimedStorage-ByteHrs | 25 GB-Mo | US$ 0,00 |
-| **cobrado** | | **US$ 0,00** |
+| **Requests-Tier1** (PUT) | **17.116.012** | zero — absorvido pelo crédito |
+| Requests-Tier2 (GET) | 14.932 | zero |
+| TimedStorage-ByteHrs | 25 GB-Mo | zero |
 
 E o resto da conta, que o recorte "só S3" escondia — **este é o dinheiro que
-realmente sai**:
-
-| US$ | serviço |
-|---:|---|
-| 10,96 | Amazon Virtual Private Cloud |
-| 7,44 | AWS WAF |
-| 5,83 | Elastic Load Balancing |
-| 0,65 | Secrets Manager |
-| 0,51 | Route 53 |
-| 0,12 | ECS + ECR |
-| **25,50** | **total de setembro** |
+realmente sai**, em ordem de peso: **VPC**, **AWS WAF**, **Elastic Load
+Balancing**, **Secrets Manager**, **Route 53** e, por último, **ECS + ECR**.
 
 VPC, WAF e ELB são 95% da fatura. O S3 domina o *volume* e não custa nada
 ainda; VPC e WAF custam pouco e custam **hoje**.
@@ -319,7 +289,7 @@ Vale registrar, porque o erro tem padrão:
   que toda execução do cron reconstruía, a partir de uma amostra de seis
   execuções tirada de um dia de merges — o dia menos representativo possível.
 - Tratei o acúmulo de versões não-correntes como problema de custo. O
-  armazenamento inteiro são **19,2 GB, US$ 0,44/mês**. A regra de ciclo de vida
+  armazenamento inteiro são **19,2 GB**, e sai por quase nada. A regra de ciclo de vida
   (`edge.tf`) continua certa como higiene — impede crescimento sem limite —,
   mas não era urgência financeira nenhuma.
 
@@ -391,8 +361,8 @@ números medidos na seção anterior, não de estimativa nova.
 
 | item | PUT/mês | custo |
 |---|---:|---:|
-| páginas das 474 cidades com dado | +21 mil | **US$ 0,11** |
-| ou: páginas dos 5.570 municípios | +252 mil | **US$ 1,26** |
+| páginas das 474 cidades com dado | +21 mil | centavos |
+| ou: páginas dos 5.570 municípios | +252 mil | ~12× o anterior, ainda centavos |
 | tabela `emenda` no RDS (~6,3 mil linhas/ano) | — | desprezível |
 | ingestão diária da API da CGU (421 páginas) | — | ~3 min a mais de Fargate |
 
@@ -409,18 +379,18 @@ emendas concluir num horário próprio, ela vira uma quinta mudança de
 watermark e provoca **mais uma reconstrução completa dos 294.701 objetos**:
 
 ```
-+294.701 objetos × 30 dias  =  +8,8 milhões de PUT/mês  =  +US$ 44,21/mês
++294.701 objetos × 30 dias  =  +8,8 milhões de PUT/mês
 ```
 
-Contra **US$ 1,26** das páginas da própria funcionalidade. A fonte nova custa
-centavos; o rebuild que ela dispara custa 35 vezes mais que ela.
+Contra os +252 mil das páginas da própria funcionalidade. A fonte nova custa
+centavos; **o rebuild que ela dispara custa 35 vezes mais que ela**.
 
 ### Duas decisões de implementação que decorrem disso
 
 **1. A ingestão de emendas roda dentro da janela das fontes existentes**
 (02:00–07:30), não em horário próprio. O watermark muda uma vez, não duas.
 Emenda não é dado de minuto — atraso de algumas horas é irrelevante para o
-leitor e vale US$ 44/mês.
+leitor e evita a reconstrução extra inteira.
 
 **2. Pré-renderizar só as 474 cidades com dado**, não os 5.570 municípios.
 As outras 5.096 páginas seriam idênticas — a mesma tela de "nenhuma emenda
@@ -433,13 +403,9 @@ sem perder nada: página vazia não tem o que indexar.
 Esta projeção torna o número da seção anterior mais concreto: enquanto cada
 publicação escrever 294.701 objetos, **qualquer** fonte ou página nova herda
 esse custo multiplicado. Cortar o pré-render de proposições e votações não
-economiza só os US$ 67/mês de hoje — barateia tudo que vier depois.
+economiza só a linha de hoje — barateia tudo que vier depois.
 
 ## Resumo
-
-| | Total (45 dias) |
-|---|---:|
-| Estimado | US$ 236 (~R$ 1.298) |
 
 Comparação lado a lado com GCP: ver
 [CUSTOS_INFRA_GCP.md § Comparativo rápido](CUSTOS_INFRA_GCP.md#comparativo-rápido-com-o-plano-aws).

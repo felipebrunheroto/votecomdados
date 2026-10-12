@@ -66,8 +66,7 @@ referência de comparação, não como alternativa em aberto.
   prática, se o tráfego for irregular (baixo à noite/fim de semana), o
   Cloud Run pode escalar para menos instâncias nesses períodos e custar
   menos que o valor mostrado — o Fargate não tem essa elasticidade.
-- **Valores em USD**, cotação de referência R$ 5,50 apenas para ordem de
-  grandeza. Preços são **estimativas de planejamento** — validar na
+- Preços são **estimativas de planejamento** — validar na
   [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator)
   antes de comprometer orçamento.
 
@@ -105,16 +104,16 @@ prazo:
 | Domínio (.org.br/.com.br via registro.br) | registro anual — único | 24 |
 | **Subtotal** | | **≈ 270** |
 | Margem de contingência (15%) | | 41 |
-| **Total (45 dias)** | | **≈ US$ 311 (~R$ 1.711)** |
+
 
 ---
 
 ## Notas importantes
 
 - **O crédito de conta nova quase paga o período inteiro.** Contas GCP novas
-  recebem US$ 300 em créditos válidos por 90 dias. Um período de produção de
+  recebem crédito de conta nova válido por 90 dias. Um período de produção de
   45 dias cabe inteiro dentro dessa janela de validade, e o total estimado
-  (US$ 311) fica a menos de 4% de distância do crédito — se a conta ainda
+  fica a menos de 4% de distância do crédito — se a conta ainda
   não tiver sido usada para outro projeto, o custo real de sair do papel
   pode ser quase zero, restando só a margem de contingência não usada. Vale
   confirmar o saldo do crédito antes de assinar qualquer estimativa como
@@ -143,7 +142,7 @@ prazo:
   HTTP de borda como camada primária ele já era candidato a corte; a definição
   de ~1.000 visitas/dia resolveu a dúvida antes da medição: espalhado por
   milhares de páginas, esse tráfego o deixaria tão frio quanto a borda, e um
-  cache frio é só custo. Sai o equivalente a ~US$ 21/mês, um SPOF e uma
+  cache frio é só custo. Sai a linha mais cara depois do compute, um SPOF e uma
   dependência de runtime — mais do que o suficiente para pagar o Cloud Armor
   e a retenção de backup, que eram as duas mitigações que o orçamento
   original não comportava.
@@ -201,7 +200,7 @@ prazo:
 
 | | AWS (região original, `sa-east-1`) | AWS (região decidida, `us-east-1`) | GCP (`southamerica-east1`) |
 |---|---:|---:|---:|
-| Total (45 dias) | US$ 269 (~R$ 1.480) | US$ 236 (~R$ 1.298) | US$ 311 (~R$ 1.711) |
+| Total (45 dias) | referência | ~12% abaixo da referência | ~16% acima da referência |
 
 **Leitura histórica:** no desenho original (as duas regiões de menor
 latência ao Brasil), o GCP ficava ~16% mais caro que a AWS — o Cloud Run com
@@ -211,8 +210,8 @@ tamanho de tarefa. A migração da AWS para `us-east-1` (mais barata, mais
 distante do usuário brasileiro) alarga essa diferença para ~32% — uma
 comparação que já não é simétrica, já que o GCP mantém `southamerica-east1`
 nesta tabela apenas como referência, sem uma migração equivalente cogitada.
-Essa diferença de custo é **menor que o crédito de conta nova da GCP** (US$
-300 em 90 dias), o que teria feito o GCP sair mais barato na prática para
+Essa diferença de custo é **menor que o crédito de conta nova da GCP**,
+válido por 90 dias, o que teria feito o GCP sair mais barato na prática para
 quem abrisse conta pela primeira vez — um dado que pesou na decisão, mas não
 foi o decisivo.
 
@@ -220,4 +219,4 @@ foi o decisivo.
 
 | | Total (45 dias) |
 |---|---:|
-| Estimado | US$ 311 (~R$ 1.711) |
+| Estimado | ~16% acima do plano AWS |

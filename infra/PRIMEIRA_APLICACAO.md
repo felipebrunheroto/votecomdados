@@ -84,9 +84,9 @@ terraform apply
 > tentativa ("This instance size isn't available with free plan
 > accounts"). A saída foi upgrade para o **Paid plan**
 > (`console.aws.amazon.com/billing/home?#/freetier/upgrade`), que preserva
-> os créditos. Vale notar que o teto de crédito do Free plan (US$ 100-200)
-> já é menor que a própria estimativa de 45 dias deste projeto (~US$ 236,
-> ver `docs/CUSTOS_INFRA_AWS.md`) — o Free plan nunca seria suficiente,
+> os créditos. Vale notar que o teto de crédito do Free plan já é menor que a
+> própria estimativa de 45 dias deste projeto (ver
+> `docs/CUSTOS_INFRA_AWS.md`) — o Free plan nunca seria suficiente,
 > independentemente do RDS.
 
 ## 5. Configurar o GitHub Actions com os outputs

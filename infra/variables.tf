@@ -75,8 +75,8 @@ variable "desligado" {
   description = <<-EOT
     Fase 0 do desligamento (06/10/2026): para o que consome sem destruir nada.
 
-    A eleição passou e o Free Tier da conta acabou em 30/09 — a fatura saiu de
-    US$ 25 para US$ 214/mês. A decisão é o nível B do plano: desligar tudo e
+    A eleição passou e o Free Tier da conta acabou em 30/09, multiplicando a
+    fatura por cerca de oito. A decisão é o nível B do plano: desligar tudo e
     guardar o dado fora da AWS.
 
     Existe como VARIÁVEL, e não como edição direta de cada recurso, por um
@@ -87,8 +87,8 @@ variable "desligado" {
 
     Com `true`:
       - os 4 agendamentos do EventBridge ficam DISABLED
-      - o serviço ECS vai a `desired_count = 0` (derruba US$ 37/mês e 2 dos 4
-        IPv4 públicos)
+      - o serviço ECS vai a `desired_count = 0` (derruba a maior linha de
+        compute e 2 dos 4 IPv4 públicos)
       - os dois alarmes OPERACIONAIS param de notificar — com a API fora eles
         disparam corretamente, e o aviso certo na hora errada é ruído
 

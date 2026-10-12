@@ -20,7 +20,8 @@ on:
   # com o ECS em zero a API não responde: daria 24 execuções vermelhas por dia,
   # de graça e sem informação nenhuma.
   #
-  # Cada publicação custa US$ 1,51 de PUT. Este cron era o maior item da conta.
+  # Cada publicação reescreve ~303 mil objetos em PUT. Este cron era o maior
+  # item da conta.
   #
   # `verificar-guardrails` continua agendado DE PROPÓSITO: é ele que mede a
   # fatura caindo, e sem ele o desligamento não tem como ser conferido.
