@@ -1,5 +1,15 @@
 name: Buscar emendas (CGU)
 
+# INERTE DESDE 12/10/2026. A infraestrutura deste projeto foi destruida (nivel
+# B do desligamento, ver o README) e a role OIDC que este workflow assumia foi
+# apagada. Qualquer execucao falha em `configure-aws-credentials` com
+# "Credentials could not be loaded from any providers".
+#
+# O arquivo fica como registro do que o pipeline fazia. Os gatilhos automaticos
+# sairam para nao gerar execucao vermelha; `workflow_dispatch` continua, porque
+# remover todo gatilho tornaria o workflow invalido para o Actions.
+#
+
 # Invoca a Lambda em sa-east-1 que busca as emendas do ano e grava o JSON no
 # bucket de ingestão.
 #

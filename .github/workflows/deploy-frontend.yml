@@ -1,5 +1,15 @@
 name: Deploy frontend
 
+# INERTE DESDE 12/10/2026. A infraestrutura deste projeto foi destruida (nivel
+# B do desligamento, ver o README) e a role OIDC que este workflow assumia foi
+# apagada. Qualquer execucao falha em `configure-aws-credentials` com
+# "Credentials could not be loaded from any providers".
+#
+# O arquivo fica como registro do que o pipeline fazia. Os gatilhos automaticos
+# sairam para nao gerar execucao vermelha; `workflow_dispatch` continua, porque
+# remover todo gatilho tornaria o workflow invalido para o Actions.
+#
+
 # Fase 7 do plano DevSecOps/IaC — implementa o pipeline já especificado em
 # docs/FRONTEND.md § 1 "Pipeline de rebuild" e § 9 "Deploy (CI)".
 #
@@ -20,16 +30,20 @@ on:
   # com o ECS em zero a API não responde: daria 24 execuções vermelhas por dia,
   # de graça e sem informação nenhuma.
   #
-  # Cada publicação custa US$ 1,51 de PUT. Este cron era o maior item da conta.
+  # Cada publicação reescreve ~303 mil objetos em PUT. Este cron era o maior
+  # item da conta.
   #
   # `verificar-guardrails` continua agendado DE PROPÓSITO: é ele que mede a
   # fatura caindo, e sem ele o desligamento não tem como ser conferido.
   #
   # schedule:
   #   - cron: "17 * * * *"
-  push:
-    branches: [main]
-    paths: ["web/**"]
+  # Desligado em 12/10/2026 (ver a nota no topo): nao ha mais bucket nem
+  # distribuicao para publicar.
+  #
+  #   push:
+  #     branches: [main]
+  #     paths: ["web/**"]
   workflow_dispatch:
     inputs:
       forcar:

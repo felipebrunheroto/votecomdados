@@ -50,9 +50,9 @@ resource "aws_sns_topic_subscription" "relatorio_email" {
   endpoint  = var.billing_alert_email
 }
 
-# --- Billing: 50/80/100% do teto de referência (~US$170/mês — ver
+# --- Billing: 50/80/100% do teto de referência (ver
 #     ARQUITETURA.md § 9 "Orçamento"; os 45 dias de CUSTOS_INFRA_AWS.md
-#     equivalem a ~US$157/mês, então US$170 é a mesma folga já documentada,
+#     equivalem a pouco menos que o teto, que é a mesma folga já documentada,
 #     não um número novo). ---
 #
 # PRÉ-REQUISITO FORA DO TERRAFORM: a métrica AWS/Billing só existe se

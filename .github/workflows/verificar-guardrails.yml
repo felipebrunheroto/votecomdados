@@ -1,5 +1,15 @@
 name: Verificar guardrails
 
+# INERTE DESDE 12/10/2026. A infraestrutura deste projeto foi destruida (nivel
+# B do desligamento, ver o README) e a role OIDC que este workflow assumia foi
+# apagada. Qualquer execucao falha em `configure-aws-credentials` com
+# "Credentials could not be loaded from any providers".
+#
+# O arquivo fica como registro do que o pipeline fazia. Os gatilhos automaticos
+# sairam para nao gerar execucao vermelha; `workflow_dispatch` continua, porque
+# remover todo gatilho tornaria o workflow invalido para o Actions.
+#
+
 # Fase 8 do plano DevSecOps/IaC: "alarme não testado é alarme que não existe".
 #
 # Existe porque três coisas podem estar erradas SEM nenhum sinal:
@@ -27,7 +37,12 @@ on:
         description: "Forca o alarme de billing 50% para ALARM e volta — manda e-mail DE VERDADE"
         type: boolean
         default: false
-  schedule:
+  # Desligado em 12/10/2026 (ver a nota no topo). Passou a falhar no passo 3
+  # -- a assinatura do SNS, que foi destruida --, e como esse passo vem antes
+  # de todos os outros, o relatorio inteiro era pulado: um X vermelho por dia
+  # sem informacao nenhuma.
+  #
+  # schedule:
     # DIARIO, 06:40 UTC. Era semanal, junto do CodeQL e do Trivy, tratando
     # isto como varredura de seguranca. Nao e: e conferencia operacional, e a
     # diferenca ficou clara em 11/09/2026.
@@ -46,7 +61,7 @@ on:
     # Custa algumas chamadas de leitura e o download dos logs do dia. Em
     # repositorio publico os minutos sao gratuitos. O preco de errar a
     # cadencia para menos e bem maior que o de rodar todo dia.
-    - cron: "40 6 * * *"
+    # - cron: "40 6 * * *"
 
 permissions:
   id-token: write
@@ -141,8 +156,8 @@ jobs:
       # para errar, e a tabela por servico responde a pergunta maior ("para
       # onde vai o dinheiro") pelo mesmo preco.
       #
-      # CUSTA DINHEIRO: a API cobra US$ 0,01 por requisicao. Uma por dia da
-      # US$ 0,30/mes. Fica declarado na propria secao, para nao ser surpresa
+      # CUSTA DINHEIRO: a API do Cost Explorer e cobrada por requisicao. Uma
+      # por dia e barato. Fica declarado na propria secao, para nao ser surpresa
       # na fatura: monitoramento de custo que custa em silencio seria piada
       # ruim. Se paga se evitar um unico mes de PUT desnecessario.
       #
@@ -210,19 +225,19 @@ jobs:
               | ($tudo | map(select(.v > 0))) as $t
               | if ($t | length) == 0 then "VAZIO" else
                   ($t | map(.v) | add) as $soma
-                  | ( "| US$ | % | serviço |", "|---:|---:|---|",
+                  | ( "| valor | % | serviço |", "|---:|---:|---|",
                       ( $porServico | map(select(.v > 0)) | sort_by(-.v) | .[:10][]
                         | "| \(.v | dinheiro) | \(.v / $soma * 1000 | round / 10)% | \(.s) |" ),
                       "| **\($soma | dinheiro)** | | **total da conta** |" )
                   , ( ($s3dias | map(select(.q > 0)) | sort_by(-.q)) as $s3
                       | if ($s3 | length) == 0 then empty else
                           ( "", "Dentro do S3 — por VOLUME, nao por custo:", "",
-                            "| requisições/GB-mês | US$ | tipo de uso |", "|---:|---:|---|",
+                            "| requisições/GB-mês | valor | tipo de uso |", "|---:|---:|---|",
                             ( $s3[:8][]
                               | "| \(.q | round | milhar) | \(.v | dinheiro) | `\(.u)` |" ) )
                         end )
                   , ( "", "Por dia, os últimos 8:", "",
-                      "| dia | US$ |", "|---|---:|",
+                      "| dia | valor |", "|---|---:|",
                       ( $dias[] | "| \(.d) | \(.v | dinheiro) |" ) )
                 end
             ' custo.json 2>/dev/null)" || TABELA=""
@@ -676,8 +691,8 @@ jobs:
 
       # Isto e o unico passo que MUDA algo, e por isso e opt-in. Forcar o
       # estado e melhor que "gastar de proposito": a metrica de billing so
-      # atualiza a cada ~6h, e cruzar 50% de US$170 de verdade custaria
-      # US$85. O que precisa ser provado e o CAMINHO da notificacao, e esse
+      # atualiza a cada ~6h, e cruzar 50% do teto de verdade custaria metade
+      # dele. O que precisa ser provado e o CAMINHO da notificacao, e esse
       # e identico nos dois casos.
       - name: teste de entrega (manda e-mail de verdade)
         if: inputs.testar_entrega

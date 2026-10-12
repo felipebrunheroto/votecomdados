@@ -309,7 +309,7 @@ quer a chave), e `504` da task em us-east-1 e de runner do GitHub Actions. O
 **Por que 06:45 e não outro horário.** Dentro da janela das demais fontes, de
 propósito. Cada publicação do frontend escreve 294.701 objetos, e uma fonte
 que conclui em hora isolada dispara mais uma reconstrução por dia:
-**US$ 44/mês** contra US$ 1,26 das páginas da funcionalidade inteira. Ver
+**~35 vezes** o custo das páginas da funcionalidade inteira. Ver
 [CUSTOS_INFRA_AWS.md](CUSTOS_INFRA_AWS.md).
 
 ### Refrescar o ano anterior — tarefa mensal

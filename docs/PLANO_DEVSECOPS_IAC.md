@@ -12,7 +12,7 @@ Este plano não inventa arquitetura nova: ele **implementa o que os outros
 documentos já decidiram**, na ordem que faz sentido para um projeto com
 essas restrições específicas — um único operador sem plantão
 ([ARQUITETURA.md § 9](ARQUITETURA.md#operação-um-operador-sob-demanda-sem-plantão)),
-orçamento de ~US$ 236 para 45 dias de produção na AWS, região `us-east-1`
+orçamento fechado para 45 dias de produção na AWS, região `us-east-1`
 ([CUSTOS_INFRA_AWS.md](CUSTOS_INFRA_AWS.md)), sem ambiente de staging.
 Ferramenta que não se paga sozinha nesse contexto não entra — é a mesma
 régua que já cortou Redis, Kubernetes e um broker de fila do resto do
@@ -475,8 +475,8 @@ Antes de começar a contar os 45 dias do plano de custo:
    chega** — alarme não testado é alarme que não existe.
 
    **Revisado em 08/09/2026: não por "forçar um gasto pequeno".** A métrica
-   de billing só atualiza a cada ~6h, e cruzar 50% de US$170 exigiria gastar
-   US$85 de verdade — num projeto cujo orçamento inteiro é ~US$236. O que
+   de billing só atualiza a cada ~6h, e cruzar 50% do teto exigiria gastar
+   metade dele de verdade — fração relevante do orçamento inteiro. O que
    precisa ser provado é o *caminho* da notificação, idêntico nos dois casos,
    então o teste usa `cloudwatch set-alarm-state`: instantâneo e grátis.
 

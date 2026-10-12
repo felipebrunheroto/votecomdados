@@ -393,8 +393,8 @@ mandato/atuação e servir o restante via rota dinâmica no cliente.
 100% das respostas são públicas e idênticas para todos os usuários. Esse é o
 caso ideal de cache HTTP na CDN, que responde na borda sem tocar em compute,
 enquanto o Redis exige uma requisição chegar ao container para depois evitar o
-banco. Manter o Redis custa US$ 19–21/mês, adiciona um SPOF (B2) e uma
-dependência de runtime, para entregar menos que um header
+banco. Manter o Redis custa a linha mais cara depois do compute, adiciona um
+SPOF (B2) e uma dependência de runtime, para entregar menos que um header
 `Cache-Control: public, s-maxage=300, stale-while-revalidate=600`.
 
 **A3. Banco single-AZ, burstable, sem backup documentado.**
@@ -518,8 +518,8 @@ R6. Reforçado pela Q12 — não há operador para pagar o custo cognitivo.)*
 A revisão foi
 pedida com foco em ciclo de vida de pods, probes, requests/limits e evicções —
 mas **o design atual não usa Kubernetes**, e introduzi-lo aqui seria um erro:
-o control plane do EKS custa ~US$ 73/mês e o GKE equivalente é comparável,
-sobre um orçamento total de US$ 120–170/mês — antes de qualquer nó. Para dois
+o control plane do EKS sozinho consome quase metade do orçamento mensal
+previsto, e o GKE equivalente é comparável — antes de qualquer nó. Para dois
 artefatos (uma API e um job em cron), K8s adiciona uma superfície operacional
 que não se paga. As preocupações legítimas por trás do pilar continuam
 válidas e mapeiam para ECS/Cloud Run — ver R6.
@@ -817,7 +817,8 @@ veículo grande multiplicando por 100 é absorvida pela CDN sem tocar no compute
 Três consequências:
 
 1. **O Redis deixa de se justificar** (A2). Com esse volume, ele fica tão frio
-   quanto a borda, e um cache frio é só custo: US$ 19–21/mês, um SPOF já
+   quanto a borda, e um cache frio é só custo: a linha mais cara depois do
+   compute, e um SPOF já
    documentado no B2 e uma dependência de runtime, para acerto próximo de zero.
    O gatilho de revisão que a tabela de decisões registrava — "medir a taxa de
    acerto na borda" — é respondido pela volumetria antes mesmo da medição.
@@ -948,7 +949,7 @@ listado e aprovado antes; alarme de billing em 50%, 80% e 100% do previsto; e
 **nada que escale com tráfego fica sem limite superior** — teto de tasks,
 limite de requisições no WAF e na CDN.
 
-A conta fecha bem: remover o Redis (Q7) libera ~US$ 20/mês, que cobre com folga
+A conta fecha bem: remover o Redis (Q7) libera o suficiente para cobrir com folga
 o WAF e a retenção de backup da Q5 — as duas mitigações que o A3 e o B7 pediam
 e que o orçamento original não comportava.
 

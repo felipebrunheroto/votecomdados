@@ -144,7 +144,8 @@ destaque:
   resposta da API é pública e idêntica para qualquer usuário, então a borda
   resolve o tráfego sem que a requisição chegue ao container. Não há cache
   in-memory atrás da API: a 1.000 visitas/dia ele ficaria tão frio quanto a
-  borda, custando ~US$ 20/mês e uma dependência de runtime para não entregar
+  borda, custando a linha mais cara depois do compute, e uma dependência de
+  runtime, para não entregar
   nada (ver § 7).
 - **O navegador fala direto com a API.** Como o frontend é export estático
   (ver [FRONTEND.md](FRONTEND.md)), não existe servidor Node em produção
@@ -803,7 +804,8 @@ foi **removido**, e o motivo é a volumetria, não elegância.
 Com ~1.000 visitas/dia espalhadas por milhares de páginas, a chance de duas
 requisições pedirem a mesma coisa dentro da vida útil de uma entrada é
 desprezível. O Redis ficaria **tão frio quanto a borda** — e um cache frio não
-é neutro: custava ~US$ 20/mês, era um SPOF (o B2 da revisão: health check
+é neutro: custava a linha mais cara depois do compute e era um SPOF (o B2 da
+revisão: health check
 agregado derrubando a frota, `@Cacheable` falhando fechado) e obrigava a API a
 carregar um `CacheErrorHandler` de fail-open só para sobreviver à queda de algo
 que não entregava nada.
@@ -981,7 +983,7 @@ há operador para pagar seu custo cognitivo.
 
 ### Orçamento
 
-O teto de ~US$ 170/mês não é rígido, mas **gasto precisa de aprovação antes de
+O teto mensal não é rígido, mas **gasto precisa de aprovação antes de
 ser provisionado**. Regra operacional: nenhum recurso novo sem estar listado e
 aprovado; alarme de billing em 50%, 80% e 100% do previsto; e nada que escale
 com tráfego sem limite superior — teto de tasks, limite de requisições no WAF
@@ -990,13 +992,12 @@ e na CDN.
 Com a remoção do Redis e a inclusão de backup, o plano original (piloto +
 mês de uso) fechava **abaixo** do teto. A decisão de ir direto para produção
 e ficar só 45 dias (sem piloto — ver
-[CUSTOS_INFRA_AWS.md](CUSTOS_INFRA_AWS.md)) mudou essa conta para ≈US$ 269
-nos 45 dias, ~5% acima de um teto equivalente de ~US$ 255 para o mesmo
-período (US$ 170/mês × 1,5) — a folga que cobria WAF e backup no plano de
-dois meses não sobrava mais ao pular a fase piloto. A migração de região
+[CUSTOS_INFRA_AWS.md](CUSTOS_INFRA_AWS.md)) deixou os 45 dias **~5% acima**
+do teto escalado para o mesmo período — a folga que cobria WAF e backup no
+plano de dois meses não sobrava mais ao pular a fase piloto. A migração de região
 decidida em seguida (`sa-east-1` → `us-east-1`, custo sobre latência — ver
 [CUSTOS_INFRA_AWS.md](CUSTOS_INFRA_AWS.md#premissas)) trouxe o total de
-volta para ≈US$ 236, **~7% abaixo** do teto escalado. O plano de GCP
+volta para **~7% abaixo** do teto escalado. O plano de GCP
 ([CUSTOS_INFRA_GCP.md](CUSTOS_INFRA_GCP.md)) segue como referência de
 comparação, não como implementação — ver
 [PLANO_DEVSECOPS_IAC.md § 3](PLANO_DEVSECOPS_IAC.md#3-decisões-do-owner).

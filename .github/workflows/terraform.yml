@@ -1,5 +1,15 @@
 name: Terraform
 
+# INERTE DESDE 12/10/2026. A infraestrutura deste projeto foi destruida (nivel
+# B do desligamento, ver o README) e a role OIDC que este workflow assumia foi
+# apagada. Qualquer execucao falha em `configure-aws-credentials` com
+# "Credentials could not be loaded from any providers".
+#
+# O arquivo fica como registro do que o pipeline fazia. Os gatilhos automaticos
+# sairam para nao gerar execucao vermelha; `workflow_dispatch` continua, porque
+# remover todo gatilho tornaria o workflow invalido para o Actions.
+#
+
 # Fase 6 do plano DevSecOps/IaC (docs/PLANO_DEVSECOPS_IAC.md). Autentica
 # via OIDC (sem chave estática — o provider e a role vêm da Fase 4/5), não
 # roda `apply` sem o clique manual do ambiente `production` (D4).
@@ -23,11 +33,14 @@ name: Terraform
 #                              autentica leitura e nao deriva identificador.
 
 on:
-  pull_request:
-    paths: ["infra/**"]
-  push:
-    branches: [main]
-    paths: ["infra/**"]
+  # Desligados em 12/10/2026 (ver a nota no topo): falhavam em TODO PR que
+  # tocasse `infra/**`, antes mesmo do backend, porque a role nao existe mais.
+  #
+  #   pull_request:
+  #     paths: ["infra/**"]
+  #   push:
+  #     branches: [main]
+  #     paths: ["infra/**"]
   # Sem isto, a unica forma de perguntar "a infraestrutura ainda bate com o
   # codigo?" era empurrar uma mudanca em `infra/**`. Em 09/09/2026 a
   # assinatura de e-mail do SNS sumiu da conta -- o plan de 15 horas antes a
