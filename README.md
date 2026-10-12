@@ -1,5 +1,39 @@
 # VoteComDados
 
+> ## Projeto encerrado em 12 de outubro de 2026
+>
+> A eleição de 2026 passou e o Free Tier de 12 meses da conta AWS acabou em
+> 30/09/2026, tornando a manutenção injustificada para um projeto cujo
+> propósito era aquele pleito. A infraestrutura foi desligada e destruída;
+> `votecomdados.com.br` não resolve mais e o registro do domínio não será
+> renovado.
+>
+> **Os dados continuam públicos na fonte.** Nada do que a plataforma mostrava
+> era exclusivo dela — ela cruzava:
+>
+> - **TSE** — candidaturas, em `dadosabertos.tse.jus.br` (pacotes
+>   `consulta_cand` por ano)
+> - **Câmara dos Deputados** — proposições e votações nominais, em
+>   `dadosabertos.camara.leg.br`
+> - **Senado Federal** — em `legis.senado.leg.br/dadosabertos`
+> - **Alesp** — em `www.al.sp.gov.br/dados-abertos`
+> - **CGU / Portal da Transparência** — emendas parlamentares, em
+>   `portaldatransparencia.gov.br/api-de-dados`
+>
+> **O que este repositório continua servindo.** O código do pipeline de
+> ingestão, da API e do frontend; a infraestrutura em Terraform; e os runbooks
+> em `docs/` e `infra/`. Boa parte do valor está nos comentários: eles
+> registram por que cada decisão foi tomada, **incluindo os erros e o que a
+> medição desmentiu** — do roteamento de borda que servia 200 para tudo ao
+> `force_destroy` que não dá conta de um bucket versionado grande.
+>
+> O desligamento em si está documentado no cabeçalho de
+> [`.github/workflows/destruir.yml`](.github/workflows/destruir.yml) e em
+> [`docs/CUSTOS_INFRA_AWS.md`](docs/CUSTOS_INFRA_AWS.md).
+>
+> O que segue abaixo descreve a plataforma como ela funcionava.
+
+
 Plataforma de transparência legislativa e eleitoral: para cada candidato da
 eleição de **2026**, toda a vida política disponível — trajetória eleitoral nos
 três níveis e atuação legislativa — cruzando dados do TSE, da Câmara dos
