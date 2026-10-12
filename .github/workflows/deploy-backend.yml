@@ -1,5 +1,15 @@
 name: Deploy backend
 
+# INERTE DESDE 12/10/2026. A infraestrutura deste projeto foi destruida (nivel
+# B do desligamento, ver o README) e a role OIDC que este workflow assumia foi
+# apagada. Qualquer execucao falha em `configure-aws-credentials` com
+# "Credentials could not be loaded from any providers".
+#
+# O arquivo fica como registro do que o pipeline fazia. Os gatilhos automaticos
+# sairam para nao gerar execucao vermelha; `workflow_dispatch` continua, porque
+# remover todo gatilho tornaria o workflow invalido para o Actions.
+#
+
 # Fase 7 do plano DevSecOps/IaC. Builda as duas imagens (API e worker),
 # publica no ECR com a tag do commit e aponta o ECS service da API para a
 # revisão nova.
@@ -15,9 +25,12 @@ name: Deploy backend
 # brigarem (ver o comentário em infra/compute.tf).
 
 on:
-  push:
-    branches: [main]
-    paths: ["backend/**"]
+  # Desligado em 12/10/2026 (ver a nota no topo): nao ha mais ECR para onde
+  # empurrar imagem, nem servico ECS para atualizar.
+  #
+  #   push:
+  #     branches: [main]
+  #     paths: ["backend/**"]
   workflow_dispatch: # deploy manual, útil para o primeiro (o ECR começa vazio)
 
 concurrency:

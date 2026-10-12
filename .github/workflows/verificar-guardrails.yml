@@ -1,5 +1,15 @@
 name: Verificar guardrails
 
+# INERTE DESDE 12/10/2026. A infraestrutura deste projeto foi destruida (nivel
+# B do desligamento, ver o README) e a role OIDC que este workflow assumia foi
+# apagada. Qualquer execucao falha em `configure-aws-credentials` com
+# "Credentials could not be loaded from any providers".
+#
+# O arquivo fica como registro do que o pipeline fazia. Os gatilhos automaticos
+# sairam para nao gerar execucao vermelha; `workflow_dispatch` continua, porque
+# remover todo gatilho tornaria o workflow invalido para o Actions.
+#
+
 # Fase 8 do plano DevSecOps/IaC: "alarme não testado é alarme que não existe".
 #
 # Existe porque três coisas podem estar erradas SEM nenhum sinal:
@@ -27,7 +37,12 @@ on:
         description: "Forca o alarme de billing 50% para ALARM e volta — manda e-mail DE VERDADE"
         type: boolean
         default: false
-  schedule:
+  # Desligado em 12/10/2026 (ver a nota no topo). Passou a falhar no passo 3
+  # -- a assinatura do SNS, que foi destruida --, e como esse passo vem antes
+  # de todos os outros, o relatorio inteiro era pulado: um X vermelho por dia
+  # sem informacao nenhuma.
+  #
+  # schedule:
     # DIARIO, 06:40 UTC. Era semanal, junto do CodeQL e do Trivy, tratando
     # isto como varredura de seguranca. Nao e: e conferencia operacional, e a
     # diferenca ficou clara em 11/09/2026.
@@ -46,7 +61,7 @@ on:
     # Custa algumas chamadas de leitura e o download dos logs do dia. Em
     # repositorio publico os minutos sao gratuitos. O preco de errar a
     # cadencia para menos e bem maior que o de rodar todo dia.
-    - cron: "40 6 * * *"
+    # - cron: "40 6 * * *"
 
 permissions:
   id-token: write

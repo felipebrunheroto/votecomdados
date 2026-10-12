@@ -1,5 +1,15 @@
 name: Deploy frontend
 
+# INERTE DESDE 12/10/2026. A infraestrutura deste projeto foi destruida (nivel
+# B do desligamento, ver o README) e a role OIDC que este workflow assumia foi
+# apagada. Qualquer execucao falha em `configure-aws-credentials` com
+# "Credentials could not be loaded from any providers".
+#
+# O arquivo fica como registro do que o pipeline fazia. Os gatilhos automaticos
+# sairam para nao gerar execucao vermelha; `workflow_dispatch` continua, porque
+# remover todo gatilho tornaria o workflow invalido para o Actions.
+#
+
 # Fase 7 do plano DevSecOps/IaC — implementa o pipeline já especificado em
 # docs/FRONTEND.md § 1 "Pipeline de rebuild" e § 9 "Deploy (CI)".
 #
@@ -28,9 +38,12 @@ on:
   #
   # schedule:
   #   - cron: "17 * * * *"
-  push:
-    branches: [main]
-    paths: ["web/**"]
+  # Desligado em 12/10/2026 (ver a nota no topo): nao ha mais bucket nem
+  # distribuicao para publicar.
+  #
+  #   push:
+  #     branches: [main]
+  #     paths: ["web/**"]
   workflow_dispatch:
     inputs:
       forcar:
